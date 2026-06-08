@@ -1,0 +1,52 @@
+[project]
+name = "trash-sorter"
+version = "0.1.0"
+description = "AI 쓰레기 자동 분류기 — Raspberry Pi 제어 프로그램 (BLE Peripheral + HTTP 사진서버 + 비전 + 서보/벨트)"
+requires-python = ">=3.11"
+dependencies = [
+    # 플랫폼 무관 핵심 의존성만. 하드웨어 의존성은 [pi] extra 참조.
+]
+
+[project.optional-dependencies]
+# Raspberry Pi(Linux)에서만 설치. macOS 개발/CI에서는 설치하지 않고 Mock 구현으로 동작.
+pi = [
+    "picamera2; platform_system == 'Linux'",
+    "opencv-python-headless; platform_system == 'Linux'",
+    "gpiozero; platform_system == 'Linux'",
+    "bless; platform_system == 'Linux'",
+    "numpy",
+]
+dev = [
+    "pytest>=8",
+    "ruff>=0.6",
+    "mypy>=1.10",
+    "numpy",
+]
+
+[project.scripts]
+trash-sorter = "trash_sorter.__main__:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.11"
+packages = ["trash_sorter"]
+mypy_path = "src"
+ignore_missing_imports = true   # picamera2/gpiozero/bless 등 Pi 전용 모듈은 mac에 없음
+warn_unused_ignores = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
