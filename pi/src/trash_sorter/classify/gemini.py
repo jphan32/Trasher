@@ -9,6 +9,7 @@ from __future__ import annotations
 import base64
 import itertools
 import json
+import threading
 from pathlib import Path
 from typing import Any, Protocol, cast
 
@@ -43,6 +44,7 @@ class GeminiClassifier:
         self._c = config
         self._p = prompts
         self._session = session
+        self._lock = threading.Lock()  # ThreadingHTTPServer 워커 동시호출 직렬화
 
     def _get_session(self) -> _Session:
         session = self._session
@@ -59,9 +61,10 @@ class GeminiClassifier:
 
     def classify(self, image_bytes: bytes, mime: str = "image/jpeg") -> Classification:
         url = f"{self._c.api_base}/models/{self._c.model}:generateContent"
-        resp = self._get_session().post(
-            url, json=self._build_body(image_bytes, mime), timeout=self._c.timeout_s
-        )
+        with self._lock:  # 세션 lazy-init 경쟁 + 동시 호출 직렬화
+            resp = self._get_session().post(
+                url, json=self._build_body(image_bytes, mime), timeout=self._c.timeout_s
+            )
         if resp.status_code != 200:
             raise ClassificationError(f"Gemini {resp.status_code}: {resp.text[:300]}")
         text = self._extract_text(resp.json())
@@ -109,9 +112,11 @@ class MockClassifier:
 
     def __init__(self) -> None:
         self._cycle = itertools.cycle(self._ITEMS)
+        self._lock = threading.Lock()  # itertools.cycle은 스레드 안전하지 않음
 
     def classify(self, image_bytes: bytes, mime: str = "image/jpeg") -> Classification:
-        category, tip = next(self._cycle)
+        with self._lock:
+            category, tip = next(self._cycle)
         return Classification(category=category, description=tip, confidence=0.95)
 
 

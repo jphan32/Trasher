@@ -18,16 +18,16 @@ private struct FailFetcher: PhotoFetcher {
     }
 }
 
-private struct SlowFetcher: PhotoFetcher {
-    func fetch(_ photo: PhotoReady, from device: DeviceInfo) async throws -> Data {
-        try await Task.sleep(nanoseconds: 1_000_000_000)  // deadline보다 김
-        return Data()
-    }
-}
-
 private struct ThrowingClassifier: ClassificationService {
     func classify(cycle: Int, on device: DeviceInfo) async throws -> RawClassification {
         throw PhotoFetchError.badURL
+    }
+}
+
+private struct SlowClassifier: ClassificationService {
+    func classify(cycle: Int, on device: DeviceInfo) async throws -> RawClassification {
+        try await Task.sleep(nanoseconds: 1_000_000_000)  // deadline보다 김
+        return RawClassification(label: "pet", confidence: 0.9)
     }
 }
 
@@ -37,6 +37,7 @@ final class SessionCoordinatorTests: XCTestCase {
 
     private func make(
         fetcher: PhotoFetcher = OKFetcher(data: Data([0xFF, 0xD8])),
+        classifier: ClassificationService? = nil,
         label: String = "pet",
         confidence: Double = 0.95,
         clock: FakeClock = FakeClock(),
@@ -46,7 +47,7 @@ final class SessionCoordinatorTests: XCTestCase {
         let c = SessionCoordinator(
             link: link,
             fetcher: fetcher,
-            classifier: MockClassificationService(label: label, confidence: confidence),
+            classifier: classifier ?? MockClassificationService(label: label, confidence: confidence),
             normalizer: CategoryNormalizer(),
             clock: { clock.now },
             resultDeadline: resultDeadline
@@ -121,12 +122,25 @@ final class SessionCoordinatorTests: XCTestCase {
     }
 
     func testResultDeadlineFallsBackToTimeout() async {
-        let (c, link, _) = make(fetcher: SlowFetcher(), resultDeadline: 0.05)
+        // 느린 분류(classify)가 deadline 초과 → other/timeout 폴백. (fetch가 아닌 classify 기준)
+        let (c, link, _) = make(classifier: SlowClassifier(), resultDeadline: 0.05)
         c.connected(device)
         await c.received(PhotoReady(cycle: 8, path: "/p/8.jpg"))
-        XCTAssertEqual(link.lastResult?.category, .other)  // §6 deadline 폴백
+        XCTAssertEqual(link.lastResult?.category, .other)
         XCTAssertEqual(link.lastResult?.raw, "timeout")
         XCTAssertEqual(link.lastResult?.cycle, 8)
+    }
+
+    func testFetchFailureDoesNotBlockClassification() async {
+        // 표시용 사진 fetch 실패해도 분류는 독립적으로 수행되어야 함(cycle 기반).
+        let (c, link, _) = make(fetcher: FailFetcher(), label: "can", confidence: 0.9)
+        var shown = false
+        c.onPhotoData = { _ in shown = true }
+        c.connected(device)
+        await c.received(PhotoReady(cycle: 3, path: "/p/3.jpg"))
+        XCTAssertFalse(shown)                              // 사진은 표시 안 됨(fetch 실패)
+        XCTAssertEqual(link.lastResult?.category, .can)    // 분류는 정상 수행
+        XCTAssertNotEqual(link.lastResult?.raw, "error")   // fetch 실패가 분류 실패로 번지지 않음
     }
 
     func testIncompatibleStickyIgnoresTraffic() async {
@@ -150,13 +164,15 @@ final class SessionCoordinatorTests: XCTestCase {
         XCTAssertEqual(c.state, .reward(.other))  // §2.2 Pi 진실을 따름
     }
 
-    func testFetchFailureSendsOtherFallback() async {
-        let (c, link, _) = make(fetcher: FailFetcher())
+    func testClassifyFailureSendsOtherFallback() async {
+        // 분류(classify) 실패 → other/error 폴백(§6). Pi는 어떤 경우에도 결과를 받는다.
+        let (c, link, _) = make(classifier: ThrowingClassifier())
         c.connected(device)
         await c.received(PhotoReady(cycle: 5, path: "/p/5.jpg"))
-        XCTAssertEqual(link.lastResult?.category, .other)  // §6 폴백
+        XCTAssertEqual(link.lastResult?.category, .other)
         XCTAssertEqual(link.lastResult?.cycle, 5)
         XCTAssertEqual(link.lastResult?.confidence, 0)
+        XCTAssertEqual(link.lastResult?.raw, "error")
     }
 
     func testLowConfidenceNormalizedToOther() async {
@@ -250,10 +266,12 @@ final class SessionCoordinatorTests: XCTestCase {
     }
 
     func testTipNilOnFailure() async {
+        // 분류(classify) 실패 → 팁 없음(nil).
         let link = MockPeripheralLink()
         let clock = FakeClock()
         let c = SessionCoordinator(
-            link: link, fetcher: FailFetcher(), classifier: MockClassificationService(), clock: { clock.now }
+            link: link, fetcher: OKFetcher(data: Data([1])),
+            classifier: ThrowingClassifier(), clock: { clock.now }
         )
         var tips: [String?] = []
         c.onTip = { tips.append($0) }

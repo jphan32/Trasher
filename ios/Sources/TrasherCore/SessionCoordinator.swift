@@ -153,13 +153,17 @@ public final class SessionCoordinator {
         let fetcher = self.fetcher
         let classifier = self.classifier
         let start = clock()
+
+        // ① 표시용 사진 — fetch 실패/지연이 분류를 막지 않는다(독립). cycle 가드로 stale 표시 방지.
+        if let data = try? await withTimeout(resultDeadline, { try await fetcher.fetch(photo, from: device) }),
+           activeCycle == myCycle {
+            onPhotoData?(data)
+        }
+
+        // ② 분류(cycle 기반) — Pi가 로컬 사진을 읽으므로 표시 fetch와 무관하게 수행.
         let result: ClassificationResult
         var tip: String?
         do {
-            // 사진 먼저 받아 표시(분류와 무관하게 UI에 사진을 보여준다).
-            let data = try await withTimeout(resultDeadline) { try await fetcher.fetch(photo, from: device) }
-            onPhotoData?(data)
-            // 분류는 cycle 기반 — Pi가 로컬 사진을 읽으므로 이미지를 재업로드하지 않는다.
             let remaining = max(0.1, resultDeadline - clock().timeIntervalSince(start))
             let raw = try await withTimeout(remaining) {
                 try await classifier.classify(cycle: myCycle, on: device)

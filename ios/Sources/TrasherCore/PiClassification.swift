@@ -29,8 +29,10 @@ public struct PiClassificationService: ClassificationService {
         if let http = response as? HTTPURLResponse, http.statusCode != 200 {
             throw PiClassificationError.httpStatus(http.statusCode)
         }
+        // 200인데 본문이 JSON이 아니거나 키가 없으면 일관되게 malformedResponse.
         guard
-            let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let parsed = try? JSONSerialization.jsonObject(with: data),
+            let obj = parsed as? [String: Any],
             let category = obj["category"] as? String,
             let confidence = Self.asDouble(obj["confidence"])
         else {
