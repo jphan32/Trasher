@@ -11,6 +11,9 @@ final class AppModel: ObservableObject {
     @Published private(set) var model: ScreenModel
     @Published var drawnSeed: Seed?
     @Published private(set) var photo: UIImage?   // 투입된 쓰레기 사진(processing/reward 표시)
+    @Published private(set) var stats: SortStats   // 누적 분류 집계(어트랙트 표시)
+
+    private static let statsKey = "trasher.sortStats"
 
     private let coordinator: SessionCoordinator
     private let central: BLECentral?      // 데모 모드에서는 nil
@@ -26,6 +29,7 @@ final class AppModel: ObservableObject {
             || env.environment["TRASHER_DEMO"] == "1"
 
         model = screenModel(for: .disconnected)
+        stats = Self.loadStats()
 
         if useDemo {
             let driver = DemoDriver()
@@ -49,6 +53,7 @@ final class AppModel: ObservableObject {
 
         coordinator.onStateChange = { [weak self] state in self?.apply(state) }
         coordinator.onPhotoData = { [weak self] data in self?.photo = UIImage(data: data) }
+        coordinator.onCycleComplete = { [weak self] category in self?.recordSort(category) }
 
         central?.coordinator = coordinator
         demo?.coordinator = coordinator
@@ -96,4 +101,20 @@ final class AppModel: ObservableObject {
     }
 
     var seeds: [Seed] { seedReward.seeds }  // drawSeed와 동일 인스턴스 사용(분기 방지)
+
+    // MARK: 누적 집계 영속(UserDefaults)
+    private func recordSort(_ category: WasteCategory) {
+        stats.record(category)
+        if let data = try? JSONEncoder().encode(stats) {
+            UserDefaults.standard.set(data, forKey: Self.statsKey)
+        }
+    }
+
+    private static func loadStats() -> SortStats {
+        guard let data = UserDefaults.standard.data(forKey: statsKey),
+              let s = try? JSONDecoder().decode(SortStats.self, from: data) else {
+            return SortStats()
+        }
+        return s
+    }
 }

@@ -45,7 +45,8 @@ public final class SessionCoordinator {
         didSet { if state != oldValue { onStateChange?(state) } }
     }
     public var onStateChange: ((SessionState) -> Void)?
-    public var onPhotoData: ((Data) -> Void)?   // UI 사진 표시용
+    public var onPhotoData: ((Data) -> Void)?      // UI 사진 표시용
+    public var onCycleComplete: ((WasteCategory) -> Void)?  // 집계: 사이클 완료 1회
 
     private let link: PeripheralLink
     private let fetcher: PhotoFetcher
@@ -131,7 +132,8 @@ public final class SessionCoordinator {
                 if case .reward = state {
                     // 이미 reward — 유지
                 } else {
-                    sendCommand(.stop)   // §2.1 게이팅 fallback(sorting-entry stop을 놓쳤어도 보장)
+                    sendCommand(.stop)        // §2.1 게이팅 fallback(sorting-entry stop을 놓쳤어도 보장)
+                    onCycleComplete?(sorted)  // 집계: 사이클당 1회(하트비트로 중복 안 됨)
                 }
                 state = .reward(sorted)
             } else if case .reward = state {

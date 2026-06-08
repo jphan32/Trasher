@@ -5,6 +5,7 @@ import TrasherCore
 // MARK: 어트랙트(투입 대기)
 struct AttractView: View {
     let model: ScreenModel
+    @EnvironmentObject var app: AppModel
     @State private var breathe = false
 
     var body: some View {
@@ -21,6 +22,12 @@ struct AttractView: View {
             Text(model.subtitle)
                 .font(Theme.body(34))
                 .foregroundStyle(Theme.inkSoft)
+            if app.stats.total > 0 {
+                Text("지금까지 ♻️ \(app.stats.total)개 분류했어요")
+                    .font(Theme.caption(24))
+                    .foregroundStyle(Theme.sprout)
+                    .padding(.top, 8)
+            }
             Spacer()
             Image(systemName: "arrow.down")
                 .font(.system(size: 72, weight: .black))
