@@ -4,6 +4,12 @@
 *.db
 .beads-credential-key
 
+# Swift (ios/)
+.build/
+.swiftpm/
+*.xcodeproj/xcuserdata/
+DerivedData/
+
 # Python (pi/)
 .venv/
 __pycache__/

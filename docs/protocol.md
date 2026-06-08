@@ -273,3 +273,8 @@ protocol ClassificationService {
 - 호환성 깨지는 변경 시 DeviceInfo의 `proto`를 올린다.
 - iPad는 연결 시 `proto`를 확인해 불일치하면 경고하거나 동작을 차단한다.
 - 이 문서가 단일 진실 공급원(single source of truth)이다.
+
+### 7.1 동결(freeze) 상태
+- **proto 1 = 동결 기준선.** Pi 레퍼런스 구현(`pi/`)이 모든 특성·상태·폴백 경로를 실제로 구동·검증했고(pytest 51, 통합/스모크 통과), codex 교차리뷰를 반영해 안정화됨.
+- Python 미러: `pi/src/trash_sorter/protocol.py` (검증됨). Swift 미러: `ios/.../Protocol.swift` (이 기준선에 맞춰 구현).
+- 이후 변경은 양쪽 미러 + 본 문서를 **동시에** 갱신하고 `proto`를 올린다.
