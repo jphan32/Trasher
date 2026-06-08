@@ -25,16 +25,36 @@ struct SampleImageFetcher: PhotoFetcher {
     }
 }
 
+/// 데모용 분류기 — pet/can/other를 매칭 팁과 함께 회전(데모에서 카테고리=팁 일관).
+final class DemoClassifier: ClassificationService, @unchecked Sendable {
+    private let lock = NSLock()
+    private var index = 0
+    private let items: [(String, String)] = [
+        ("pet", "페트병은 라벨을 떼고 내용물을 비운 뒤 압착해 투명 페트 전용함에 배출해요."),
+        ("can", "캔은 내용물을 비우고 물로 헹군 뒤 납작하게 만들어 캔류로 배출해요."),
+        ("other", "재활용이 어려운 일반 쓰레기는 종량제 봉투에 배출해요."),
+    ]
+    func classify(imageData: Data) async throws -> RawClassification {
+        let item = lock.withLock { () -> (String, String) in
+            let picked = items[index % items.count]
+            index += 1
+            return picked
+        }
+        return RawClassification(label: item.0, confidence: 0.95, description: item.1)
+    }
+}
+
 @MainActor
 final class DemoDriver: PeripheralLink {
     weak var coordinator: SessionCoordinator?
     private var seq = 0
     private var cycle = 0
     private var task: Task<Void, Never>?
-    private let categories: [WasteCategory] = [.pet, .can, .other]
 
     // 코디네이터의 아웃바운드 — 데모는 자동 루프라 무시(no-op). nonisolated로 프로토콜 요구 충족.
-    nonisolated func writeResult(_ result: ClassificationResult) {}
+    // iPad가 보낸 분류 결과를 가짜 Pi의 sort 카테고리로 사용(reward 카테고리=분류=팁 일치).
+    nonisolated(unsafe) private var pendingCategory: WasteCategory = .other
+    nonisolated func writeResult(_ result: ClassificationResult) { pendingCategory = result.category }
     nonisolated func writeCommand(_ command: Command) {}
 
     func start() {
@@ -48,11 +68,11 @@ final class DemoDriver: PeripheralLink {
         while !Task.isCancelled {
             await sleep(2.5)                                  // 어트랙트
             cycle += 1
-            let category = categories[cycle % categories.count]
             emit(.detecting); await sleep(0.9)
             emit(.capturing); await sleep(0.6)
+            // iPad가 사진을 받아 분류(DemoClassifier 회전) → writeResult로 pendingCategory 설정
             await coordinator?.received(PhotoReady(cycle: cycle, path: "/photos/\(cycle).jpg"))
-            // §2.2: reward는 Pi의 lastSort를 따른다 → 데모는 카테고리를 회전시켜 보여줌
+            let category = pendingCategory                   // 분류 결과대로 sort(카테고리=팁 일치)
             emit(.sorting, lastSort: category); await sleep(1.3)
             emit(.idle, lastSort: category)                  // reward 진입
             await sleep(3.5)                                 // 결과/씨앗 표시

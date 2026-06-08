@@ -22,7 +22,7 @@ final class RemoteClassificationTests: XCTestCase {
     func testClassifyParsesLabelAndConfidence() async throws {
         StubURLProtocol.handler = { req in
             XCTAssertEqual(req.httpMethod, "POST")
-            let json = #"{"label":"aluminum_can","confidence":0.81}"#.data(using: .utf8)!
+            let json = #"{"category":"aluminum_can","confidence":0.81}"#.data(using: .utf8)!
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, json)
         }
         let svc = RemoteClassificationService(config: config, session: stubSession(),
@@ -34,9 +34,21 @@ final class RemoteClassificationTests: XCTestCase {
         XCTAssertEqual(CategoryNormalizer().normalize(raw, cycle: 1).category, .can)
     }
 
+    func testParsesDescriptionTip() async throws {
+        StubURLProtocol.handler = { req in
+            let json = #"{"category":"can","confidence":0.9,"description":"캔은 헹궈서 배출하세요."}"#
+                .data(using: .utf8)!
+            return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, json)
+        }
+        let svc = RemoteClassificationService(config: config, session: stubSession())
+        let raw = try await svc.classify(imageData: Data([0xFF, 0xD8]))
+        XCTAssertEqual(raw.label, "can")
+        XCTAssertEqual(raw.description, "캔은 헹궈서 배출하세요.")  // 재활용 팁 파싱
+    }
+
     func testConfidenceAsStringIsAccepted() async throws {
         StubURLProtocol.handler = { req in
-            let json = #"{"label":"pet","confidence":"0.93"}"#.data(using: .utf8)!
+            let json = #"{"category":"pet","confidence":"0.93"}"#.data(using: .utf8)!
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, json)
         }
         let svc = RemoteClassificationService(config: config, session: stubSession())

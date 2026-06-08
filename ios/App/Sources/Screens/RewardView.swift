@@ -31,6 +31,21 @@ struct RewardView: View {
             }
             .padding(.top, 24)
 
+            // 재활용 팁(부가정보) — Gemini가 제공
+            if let tip = app.tip, !tip.isEmpty {
+                HStack(alignment: .top, spacing: 12) {
+                    Text("💡").font(.system(size: 30))
+                    Text(tip)
+                        .font(Theme.body(24))
+                        .foregroundStyle(Theme.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(20)
+                .frame(maxWidth: 640)
+                .background(Theme.sprout.opacity(0.14), in: RoundedRectangle(cornerRadius: 20))
+                .padding(.horizontal, 32)
+            }
+
             Divider().frame(width: 320).overlay(Theme.paperDeep)
 
             // 씨앗 추첨

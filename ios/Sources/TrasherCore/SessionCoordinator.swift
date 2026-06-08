@@ -47,6 +47,7 @@ public final class SessionCoordinator {
     public var onStateChange: ((SessionState) -> Void)?
     public var onPhotoData: ((Data) -> Void)?      // UI 사진 표시용
     public var onCycleComplete: ((WasteCategory) -> Void)?  // 집계: 사이클 완료 1회
+    public var onTip: ((String?) -> Void)?         // 재활용 팁(분류 완료 시, 부가정보 표시용)
 
     private let link: PeripheralLink
     private let fetcher: PhotoFetcher
@@ -153,6 +154,7 @@ public final class SessionCoordinator {
         let classifier = self.classifier
         let start = clock()
         let result: ClassificationResult
+        var tip: String?
         do {
             // 사진 먼저 받아 표시(분류 실패/타임아웃과 무관하게 UI에 사진을 보여준다).
             let data = try await withTimeout(resultDeadline) { try await fetcher.fetch(photo, from: device) }
@@ -160,6 +162,7 @@ public final class SessionCoordinator {
             // 남은 예산으로 분류 — 총 deadline이 Pi 15초를 넘지 않게.
             let remaining = max(0.1, resultDeadline - clock().timeIntervalSince(start))
             let raw = try await withTimeout(remaining) { try await classifier.classify(imageData: data) }
+            tip = raw.description           // 재활용 팁(부가정보)
             result = normalizer.normalize(raw, cycle: myCycle)
         } catch {
             let reason = error is TimeoutError ? "timeout" : "error"
@@ -167,6 +170,7 @@ public final class SessionCoordinator {
         }
         // 재진입 가드: 처리 중 새 PhotoReady가 activeCycle을 덮었으면 이 결과는 폐기(stale).
         guard activeCycle == myCycle else { return }
+        onTip?(tip)                      // 팁 표시(실패 시 nil)
         link.writeResult(result)         // cycle echo로 Pi가 상관
     }
 

@@ -234,6 +234,34 @@ final class SessionCoordinatorTests: XCTestCase {
         if case .reward = c.state { XCTFail("lastSort 없는데 reward로 감") }
     }
 
+    func testTipDeliveredOnClassification() async {
+        let link = MockPeripheralLink()
+        let clock = FakeClock()
+        let c = SessionCoordinator(
+            link: link, fetcher: OKFetcher(data: Data([1])),
+            classifier: MockClassificationService(label: "pet", confidence: 0.95, description: "테스트 팁"),
+            clock: { clock.now }
+        )
+        var tips: [String?] = []
+        c.onTip = { tips.append($0) }
+        c.connected(device)
+        await c.received(PhotoReady(cycle: 1, path: "/p/1.jpg"))
+        XCTAssertEqual(tips, ["테스트 팁"])
+    }
+
+    func testTipNilOnFailure() async {
+        let link = MockPeripheralLink()
+        let clock = FakeClock()
+        let c = SessionCoordinator(
+            link: link, fetcher: FailFetcher(), classifier: MockClassificationService(), clock: { clock.now }
+        )
+        var tips: [String?] = []
+        c.onTip = { tips.append($0) }
+        c.connected(device)
+        await c.received(PhotoReady(cycle: 1, path: "/p/1.jpg"))
+        XCTAssertEqual(tips, [String?.none])  // 분류 실패 → 팁 없음
+    }
+
     func testStallDoesNotClobberReward() async {
         let (c, _, clock) = make()
         c.connected(device)

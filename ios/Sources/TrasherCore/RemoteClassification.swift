@@ -9,19 +9,23 @@ public enum RemoteClassificationError: Error, Equatable {
     case malformedResponse
 }
 
-/// 실 API 연동 설정. 응답 JSON에서 라벨/confidence를 꺼내는 키를 설정화.
+/// 실 API 연동 설정. 응답 JSON에서 값을 꺼내는 키를 설정화.
+/// 기본값은 trash-classifier(Gemini 프록시)의 응답({category, description, confidence})에 맞춤.
 public struct RemoteClassificationConfig: Sendable {
     public var endpoint: URL
     public var fileField: String        // multipart 파일 파트 이름
-    public var labelKey: String         // 응답 JSON의 라벨 키
+    public var labelKey: String         // 응답 JSON의 분류 키
     public var confidenceKey: String    // 응답 JSON의 confidence 키
+    public var descriptionKey: String   // 응답 JSON의 재활용 팁 키
 
     public init(endpoint: URL, fileField: String = "image",
-                labelKey: String = "label", confidenceKey: String = "confidence") {
+                labelKey: String = "category", confidenceKey: String = "confidence",
+                descriptionKey: String = "description") {
         self.endpoint = endpoint
         self.fileField = fileField
         self.labelKey = labelKey
         self.confidenceKey = confidenceKey
+        self.descriptionKey = descriptionKey
     }
 }
 
@@ -58,7 +62,8 @@ public struct RemoteClassificationService: ClassificationService {
         else {
             throw RemoteClassificationError.malformedResponse
         }
-        return RawClassification(label: label, confidence: confidence)
+        let description = obj[config.descriptionKey] as? String  // 재활용 팁(없을 수 있음)
+        return RawClassification(label: label, confidence: confidence, description: description)
     }
 
     /// confidence를 숫자 또는 숫자형 문자열("0.93") 양쪽에서 허용.

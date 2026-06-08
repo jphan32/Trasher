@@ -5,13 +5,15 @@
 
 import Foundation
 
-/// 외부 API의 원시 출력(라벨 + confidence). 정규화 전.
+/// 외부 API의 원시 출력(라벨 + confidence + 재활용 팁). 정규화 전.
 public struct RawClassification: Equatable, Sendable {
     public let label: String
     public let confidence: Double
-    public init(label: String, confidence: Double) {
+    public let description: String?   // 재활용 팁(Gemini가 제공, iPad 부가정보 표시용)
+    public init(label: String, confidence: Double, description: String? = nil) {
         self.label = label
         self.confidence = confidence
+        self.description = description
     }
 }
 
@@ -21,11 +23,15 @@ public protocol ClassificationService: Sendable {
     func classify(imageData: Data) async throws -> RawClassification
 }
 
-/// 개발/데모용 Mock. 고정 결과를 반환한다.
+/// 개발/데모용 Mock. 고정 결과 + 캔드 팁을 반환한다.
 public struct MockClassificationService: ClassificationService {
     public let fixed: RawClassification
-    public init(label: String = "pet", confidence: Double = 0.95) {
-        self.fixed = RawClassification(label: label, confidence: confidence)
+    public init(
+        label: String = "pet",
+        confidence: Double = 0.95,
+        description: String? = "페트병은 라벨을 떼고 내용물을 비운 뒤 압착해 배출해요."
+    ) {
+        self.fixed = RawClassification(label: label, confidence: confidence, description: description)
     }
     public func classify(imageData: Data) async throws -> RawClassification {
         fixed

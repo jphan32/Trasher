@@ -11,6 +11,7 @@ final class AppModel: ObservableObject {
     @Published private(set) var model: ScreenModel
     @Published var drawnSeed: Seed?
     @Published private(set) var photo: UIImage?   // 투입된 쓰레기 사진(processing/reward 표시)
+    @Published private(set) var tip: String?      // 재활용 팁(reward 부가정보)
     @Published private(set) var stats: SortStats   // 누적 분류 집계(어트랙트 표시)
 
     private static let statsKey = "trasher.sortStats"
@@ -36,7 +37,7 @@ final class AppModel: ObservableObject {
             coordinator = SessionCoordinator(
                 link: driver,
                 fetcher: SampleImageFetcher(),
-                classifier: MockClassificationService()
+                classifier: DemoClassifier()  // 카테고리·팁 회전(데모 일관)
             )
             demo = driver
             central = nil
@@ -54,6 +55,7 @@ final class AppModel: ObservableObject {
         coordinator.onStateChange = { [weak self] state in self?.apply(state) }
         coordinator.onPhotoData = { [weak self] data in self?.photo = UIImage(data: data) }
         coordinator.onCycleComplete = { [weak self] category in self?.recordSort(category) }
+        coordinator.onTip = { [weak self] tip in self?.tip = tip }
 
         central?.coordinator = coordinator
         demo?.coordinator = coordinator
@@ -73,8 +75,10 @@ final class AppModel: ObservableObject {
     private func apply(_ state: SessionCoordinator.SessionState) {
         model = screenModel(for: state)
         if case .reward = state {} else { drawnSeed = nil }  // 보상 화면 떠날 때 초기화
-        switch state {                                        // 대기/연결끊김 복귀 시 사진 초기화
-        case .attract, .disconnected: photo = nil
+        switch state {                                        // 대기/연결끊김 복귀 시 사진·팁 초기화
+        case .attract, .disconnected:
+            photo = nil
+            tip = nil
         default: break
         }
     }
