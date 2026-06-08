@@ -15,9 +15,10 @@ public struct RawClassification: Equatable, Sendable {
     }
 }
 
-/// 분류 서비스 추상화. 이미지 URL → 원시 분류.
+/// 분류 서비스 추상화. 이미지 바이트 → 원시 분류.
+/// (iPad가 사진을 표시·분류 양쪽에 쓰므로 URL이 아닌 이미 받은 Data를 받는다.)
 public protocol ClassificationService: Sendable {
-    func classify(imageURL: URL) async throws -> RawClassification
+    func classify(imageData: Data) async throws -> RawClassification
 }
 
 /// 개발/데모용 Mock. 고정 결과를 반환한다.
@@ -26,7 +27,7 @@ public struct MockClassificationService: ClassificationService {
     public init(label: String = "pet", confidence: Double = 0.95) {
         self.fixed = RawClassification(label: label, confidence: confidence)
     }
-    public func classify(imageURL: URL) async throws -> RawClassification {
+    public func classify(imageData: Data) async throws -> RawClassification {
         fixed
     }
 }

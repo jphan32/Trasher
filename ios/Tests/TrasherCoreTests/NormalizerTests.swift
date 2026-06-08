@@ -37,7 +37,7 @@ final class NormalizerTests: XCTestCase {
 
     func testMockServiceProducesConfiguredResult() async throws {
         let svc = MockClassificationService(label: "can", confidence: 0.88)
-        let raw = try await svc.classify(imageURL: URL(string: "http://x/1.jpg")!)
+        let raw = try await svc.classify(imageData: Data([0xFF, 0xD8]))
         XCTAssertEqual(norm.normalize(raw, cycle: 3).category, .can)
     }
 }
