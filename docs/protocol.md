@@ -122,6 +122,8 @@ other → 중앙 경로 (좌·우 모두 닫힘)
 
 JSON 키는 짧게 유지하되 가독성을 우선한다. 모든 메시지는 MTU 협상 후 단일 notify/write에 들어가는 크기(< ~180 B)를 유지한다.
 
+> **null 생략 규약:** 값이 `null`인 optional 필드(`err`, `lastSort`, `arg`, `raw`, `w`/`h`/`ts` 등)는 **키 자체를 생략**해 보낸다. 수신 측은 **키 부재 ≡ null**로 처리한다(Swift `Codable` optional은 키 부재 시 자동 `nil`). 아래 예시의 `null`은 의미 설명용이며 와이어에는 해당 키가 없을 수 있다.
+
 ### 3.1 DeviceInfo (Read)
 ```json
 { "fw": "0.1.0", "proto": 1, "ip": "192.168.4.1", "port": 8080, "name": "sorter-01" }

@@ -50,6 +50,9 @@ class MockBleServer(BleServer):
     def simulate_command(self, command: Command) -> None:
         self._dispatch_command(command)
 
+    def simulate_disconnect(self) -> None:
+        self._dispatch_disconnect()
+
     # 편의 조회
     @property
     def last_status(self) -> Status | None:

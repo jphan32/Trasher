@@ -22,6 +22,7 @@ from ..protocol import (
 
 ResultHandler = Callable[[ClassificationResult], None]
 CommandHandler = Callable[[Command], None]
+DisconnectHandler = Callable[[], None]
 
 
 class BleServer(ABC):
@@ -29,6 +30,8 @@ class BleServer(ABC):
         # 오케스트레이터가 설정하는 수신 핸들러(iPad → Pi write).
         self.on_result: ResultHandler | None = None
         self.on_command: CommandHandler | None = None
+        # Central(iPad) 연결 끊김 알림. §6 진행 중 사이클 정리에 사용.
+        self.on_disconnect: DisconnectHandler | None = None
 
     @abstractmethod
     def start(self) -> None: ...
@@ -60,3 +63,7 @@ class BleServer(ABC):
     def _dispatch_command(self, command: Command) -> None:
         if self.on_command:
             self.on_command(command)
+
+    def _dispatch_disconnect(self) -> None:
+        if self.on_disconnect:
+            self.on_disconnect()

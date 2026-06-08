@@ -98,6 +98,7 @@ class StateMachine:
     def sort_complete(self) -> None:
         self._require(PiState.SORTING)
         self._pending_sort = None
+        self._err = None  # §6: result_timeout err은 1회 노출 후 idle에서 해제
         self._state = PiState.IDLE
 
     # --- 제어/예외 전이 -----------------------------------------------------

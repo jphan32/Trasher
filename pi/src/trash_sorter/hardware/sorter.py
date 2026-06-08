@@ -30,13 +30,20 @@ class Sorter:
         self._hw.set_gate(open=False)
         self._hw.set_route("center")
 
+    def begin_sort(self, category: WasteCategory) -> None:
+        """§2.5 1~3단계: 분기 설정 → 게이트 방출 → 벨트 구동(논블로킹)."""
+        self._hw.set_route(ROUTE_MAP[category])  # 1. 분기 경로 설정
+        self._hw.set_gate(open=True)             # 2. 게이트 열어 방출
+        self._hw.belt(on=True)                   # 3. 벨트 구동
+
+    def finish_sort(self) -> None:
+        """§2.5 5단계: 벨트 정지 → 게이트 홀드 → 분기 중앙 복귀."""
+        self._hw.belt(on=False)
+        self._hw.set_gate(open=False)
+        self._hw.set_route("center")
+
     def sort(self, category: WasteCategory) -> None:
-        """§2.5 sorting 시퀀스. 완료 시 중립(게이트 닫힘·중앙)으로 복귀."""
-        route = ROUTE_MAP[category]
-        self._hw.set_route(route)        # 1. 분기 경로 설정
-        self._hw.set_gate(open=True)     # 2. 게이트 열어 방출
-        self._hw.belt(on=True)           # 3. 벨트 구동
+        """블로킹 전체 시퀀스(수동 SORT 명령/진단용). 벨트 구동을 sleep으로 대기."""
+        self.begin_sort(category)
         self._sleep(self._settings.belt.run_seconds)  # 4. T_belt 대기
-        self._hw.belt(on=False)          # 5. 벨트 정지
-        self._hw.set_gate(open=False)    #    게이트 닫힘(홀드 복귀)
-        self._hw.set_route("center")     #    분기 중앙(닫힘) 복귀
+        self.finish_sort()

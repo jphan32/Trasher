@@ -59,11 +59,14 @@ class Orchestrator:
 
         self._cmds: queue.Queue[Command] = queue.Queue()
         self._results: queue.Queue[ClassificationResult] = queue.Queue()
+        self._disconnects: queue.Queue[bool] = queue.Queue()
         ble.on_command = self._cmds.put
         ble.on_result = self._results.put
+        ble.on_disconnect = lambda: self._disconnects.put(True)
 
         self._detect_since: float | None = None
         self._awaiting_since: float | None = None
+        self._sort_since: float | None = None  # 논블로킹 sorting 타이밍
         self._last_heartbeat = 0.0
         self._running = False
 
@@ -79,10 +82,30 @@ class Orchestrator:
 
     # --- 한 사이클 반복 -----------------------------------------------------
     def tick(self) -> None:
+        self._drain_disconnects()
         self._drain_commands()
         self._drain_results()
         self._advance_state()
         self._maybe_heartbeat()
+
+    def _drain_disconnects(self) -> None:
+        had = False
+        while True:
+            try:
+                self._disconnects.get_nowait()
+                had = True
+            except queue.Empty:
+                break
+        if had:
+            self._handle_disconnect()
+
+    def _handle_disconnect(self) -> None:
+        """§6 BLE 끊김: 진행 중 사이클을 안전 정리. iPad 재연결 시 start로 재개."""
+        self._hw.stop_all()
+        self._sort_since = None
+        self._sm.reset()
+        self._sm.stop()  # iPad가 다시 start 보낼 때까지 감지 중단
+        self._reset_timers()
 
     # --- 입력 처리 ----------------------------------------------------------
     def _drain_commands(self) -> None:
@@ -112,22 +135,34 @@ class Orchestrator:
                 case CommandType.STOP:
                     self._sm.stop()
                 case CommandType.RESET:
+                    self._sort_since = None
                     self._sm.reset()
                 case CommandType.ESTOP:
+                    self._sort_since = None
                     self._hw.stop_all()
                     self._sm.estop()
                 case CommandType.MAINTENANCE:
-                    self._sm.set_maintenance(_truthy(cmd.arg))
+                    ok = self._require_arg(cmd.arg, ("true", "false", "1", "0", "on", "off"))
+                    if ok:
+                        self._sm.set_maintenance(_truthy(cmd.arg))
                 case CommandType.SORT:
                     self._sorter.sort(WasteCategory(cmd.arg or ""))
                 case CommandType.BELT:
-                    self._hw.belt(on=(cmd.arg == "fwd"))
+                    ok = self._require_arg(cmd.arg, ("fwd", "stop"))
+                    if ok:
+                        self._hw.belt(on=(cmd.arg == "fwd"))
                 case CommandType.CALIBRATE:
                     pass  # 스캐폴드: no-op
         except (ValueError, KeyError):
             ok, err = False, ErrorCode.INTERNAL
+        if not ok and err is None:
+            err = ErrorCode.INTERNAL
         self._ble.publish_command_ack(CommandAck(id=cmd.id, ok=ok, err=err))
         self._publish_status()
+
+    @staticmethod
+    def _require_arg(arg: str | None, allowed: tuple[str, ...]) -> bool:
+        return arg is not None and arg.lower() in allowed
 
     # --- 상태 전개 ----------------------------------------------------------
     def _advance_state(self) -> None:
@@ -160,7 +195,11 @@ class Orchestrator:
         self._sm.begin_capture()
         cycle = self._sm.cycle
         path = self._store.path_for(cycle)
-        w, h = self._cam.capture_photo(str(path))
+        try:
+            w, h = self._cam.capture_photo(str(path))
+        except Exception:  # noqa: BLE001 - 캡처 실패는 camera_fail로 전환
+            self._fault(ErrorCode.CAMERA_FAIL)
+            return
         self._store.prune()
         self._sm.photo_captured()
         self._awaiting_since = self._clock()
@@ -177,13 +216,39 @@ class Orchestrator:
             self._publish_status()
 
     def _run_sort(self) -> None:
+        """논블로킹 sorting: 시작(begin) 후 T_belt 경과 시 종료(finish). 루프 응답성 유지."""
         category = self._sm.pending_sort or WasteCategory.OTHER
-        self._sorter.sort(category)
+        if self._sort_since is None:
+            try:
+                self._sorter.begin_sort(category)
+            except Exception:  # noqa: BLE001 - 모터 실패는 motor_fail로 전환
+                self._fault(ErrorCode.MOTOR_FAIL)
+                return
+            self._sort_since = self._clock()
+            return
+        if self._clock() - self._sort_since < self._s.belt.run_seconds:
+            return  # 벨트 구동 중 — estop/reset은 매 tick 처리됨
+        try:
+            self._sorter.finish_sort()
+        except Exception:  # noqa: BLE001
+            self._fault(ErrorCode.MOTOR_FAIL)
+            return
+        self._sort_since = None
         self._sm.sort_complete()
-        self._detect_since = None
-        self._awaiting_since = None
+        self._reset_timers()
         self._motion.reset()
         self._publish_status()
+
+    def _fault(self, code: ErrorCode) -> None:
+        self._hw.stop_all()
+        self._sort_since = None
+        self._sm.fault(code)
+        self._reset_timers()
+        self._publish_status()
+
+    def _reset_timers(self) -> None:
+        self._detect_since = None
+        self._awaiting_since = None
 
     # --- 출력 --------------------------------------------------------------
     def _publish_status(self) -> None:

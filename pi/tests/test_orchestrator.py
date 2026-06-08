@@ -6,7 +6,7 @@ import pytest
 
 from trash_sorter.app import Orchestrator
 from trash_sorter.ble import MockBleServer
-from trash_sorter.config import Settings
+from trash_sorter.config import BeltConfig, Settings
 from trash_sorter.hardware import MockHardware
 from trash_sorter.protocol import (
     ClassificationResult,
@@ -33,14 +33,16 @@ class FakeClock:
         self.t += dt
 
 
-def build(tmp_path, frames):
+def build(tmp_path, frames, *, hardware=None, camera=None):
     clock = FakeClock()
     ble = MockBleServer()
-    hw = MockHardware()
+    hw = hardware if hardware is not None else MockHardware()
+    # run_seconds=0 → 논블로킹 sorting이 begin 다음 tick에 즉시 finish (결정적 2-tick).
+    settings = Settings(belt=BeltConfig(run_seconds=0.0))
     orch = Orchestrator(
-        settings=Settings(),
+        settings=settings,
         state=StateMachine(),
-        camera=MockCamera(frames=frames),
+        camera=camera if camera is not None else MockCamera(frames=frames),
         motion=MotionDetector(threshold=0.02),
         hardware=hw,
         ble=ble,
@@ -122,9 +124,12 @@ def test_result_timeout_falls_back_to_other(tmp_path) -> None:
     orch.tick()  # 타임아웃 → SORTING(other)
     assert ble.last_status is not None
     assert ble.last_status.err is ErrorCode.RESULT_TIMEOUT
-    orch.tick()  # sort → IDLE
+    orch.tick()  # SORTING → begin_sort
+    orch.tick()  # SORTING → finish_sort → IDLE (run_seconds=0)
     assert "route:center" in hw.calls  # other = 중앙
     assert orch._sm.state is PiState.IDLE  # noqa: SLF001
+    # §6: err은 idle 복귀 후 해제됨
+    assert orch._sm.snapshot().err is None  # noqa: SLF001
 
 
 def test_stale_result_ignored(tmp_path) -> None:
@@ -163,3 +168,70 @@ def test_heartbeat_emitted_when_idle(tmp_path) -> None:
     clock.advance(2.1)  # heartbeat_period(2.0) 초과
     orch.tick()
     assert len(ble.statuses) == before + 1
+
+
+def test_disconnect_aborts_cycle_and_pauses(tmp_path) -> None:
+    orch, ble, hw, clock = build(tmp_path, _motion_frames())
+    ble.simulate_command(Command(cmd=CommandType.START, id=1))
+    for _ in range(3):
+        orch.tick()  # → DETECTING
+    assert orch._sm.state is PiState.DETECTING  # noqa: SLF001
+    ble.simulate_disconnect()
+    orch.tick()
+    assert orch._sm.state is PiState.IDLE  # noqa: SLF001
+    assert orch._sm.started is False  # noqa: SLF001  재연결 시 start 대기
+    assert "stop_all" in hw.calls
+
+
+class _FailingCamera(MockCamera):
+    def capture_photo(self, path: str) -> tuple[int, int]:
+        raise OSError("camera down")
+
+
+def test_camera_failure_transitions_to_error(tmp_path) -> None:
+    cam = _FailingCamera(frames=_motion_frames())
+    orch, ble, hw, clock = build(tmp_path, None, camera=cam)
+    ble.simulate_command(Command(cmd=CommandType.START, id=1))
+    for _ in range(3):
+        orch.tick()  # → DETECTING
+    clock.advance(0.6)
+    orch.tick()  # 캡처 시도 → 실패
+    assert orch._sm.state is PiState.ERROR  # noqa: SLF001
+    assert ble.last_status is not None
+    assert ble.last_status.err is ErrorCode.CAMERA_FAIL
+    assert "stop_all" in hw.calls
+
+
+class _FailingHardware(MockHardware):
+    def belt(self, *, on: bool) -> None:
+        if on:
+            raise OSError("motor stuck")
+        super().belt(on=on)
+
+
+def test_motor_failure_transitions_to_error(tmp_path) -> None:
+    orch, ble, hw, clock = build(tmp_path, _motion_frames(), hardware=_FailingHardware())
+    ble.simulate_command(Command(cmd=CommandType.START, id=1))
+    for _ in range(3):
+        orch.tick()
+    clock.advance(0.6)
+    orch.tick()  # AWAITING_RESULT
+    ble.simulate_result(
+        ClassificationResult(cycle=orch._sm.cycle, category=WasteCategory.PET, confidence=0.9)  # noqa: SLF001
+    )
+    orch.tick()  # SORTING → begin_sort(belt on) 실패 → ERROR
+    assert orch._sm.state is PiState.ERROR  # noqa: SLF001
+    assert ble.last_status is not None
+    assert ble.last_status.err is ErrorCode.MOTOR_FAIL
+
+
+@pytest.mark.parametrize(
+    "cmd_type,arg",
+    [(CommandType.BELT, "sideways"), (CommandType.BELT, None), (CommandType.MAINTENANCE, "maybe")],
+)
+def test_invalid_command_arg_acks_false(tmp_path, cmd_type, arg) -> None:
+    orch, ble, _hw, _clock = build(tmp_path, _motion_frames())
+    ble.simulate_command(Command(cmd=cmd_type, id=11, arg=arg))
+    orch.tick()
+    assert ble.acks[-1].id == 11
+    assert ble.acks[-1].ok is False

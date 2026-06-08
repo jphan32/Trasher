@@ -27,5 +27,7 @@ class MockHardware(HardwareController):
         self.calls.append(f"belt:{'on' if on else 'off'}")
 
     def stop_all(self) -> None:
+        # gpiozero 구현과 동일: 벨트 정지 + 게이트 홀드(닫힘).
         self.belt_on = False
+        self.gate_open = False
         self.calls.append("stop_all")
