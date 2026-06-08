@@ -20,6 +20,8 @@ class ClassifierConfig:
     model: str
     timeout_s: float
     temperature: float
+    max_retries: int = 2          # transient 오류(429/5xx/네트워크) 재시도 횟수
+    retry_backoff_s: float = 0.5  # 백오프 기준(attempt마다 ×(attempt+1))
     api_base: str = "https://generativelanguage.googleapis.com/v1beta"
     scope: str = "https://www.googleapis.com/auth/generative-language"
 
@@ -30,4 +32,6 @@ def load_classifier_config() -> ClassifierConfig:
         model=_env("TRASH_GEMINI_MODEL", "CLASSIFIER_MODEL", default="gemini-3.5-flash"),
         timeout_s=float(_env("TRASH_GEMINI_TIMEOUT", default="60")),
         temperature=float(_env("TRASH_GEMINI_TEMPERATURE", default="0")),
+        max_retries=int(_env("TRASH_GEMINI_RETRIES", default="2")),
+        retry_backoff_s=float(_env("TRASH_GEMINI_BACKOFF", default="0.5")),
     )

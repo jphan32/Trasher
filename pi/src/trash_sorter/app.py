@@ -194,7 +194,7 @@ class Orchestrator:
 
     @staticmethod
     def _require_arg(arg: str | None, allowed: tuple[str, ...]) -> bool:
-        # isinstance 체크로 비-문자열 arg(잘못된 JSON boolean 등)에서 AttributeError 방지 → ok=False.
+        # isinstance로 비-문자열 arg(잘못된 JSON boolean 등) AttributeError 방지 → ok=False.
         return isinstance(arg, str) and arg.lower() in allowed
 
     # --- 상태 전개 ----------------------------------------------------------

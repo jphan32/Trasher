@@ -10,6 +10,7 @@ import base64
 import itertools
 import json
 import threading
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Protocol, cast
 
@@ -37,14 +38,27 @@ class _Session(Protocol):
     def post(self, url: str, json: Any, timeout: float) -> _Response: ...
 
 
+_TRANSIENT_STATUS = frozenset({429, 500, 502, 503, 504})
+
+
 class GeminiClassifier:
     def __init__(
-        self, config: ClassifierConfig, prompts: Prompts, *, session: _Session | None = None
+        self,
+        config: ClassifierConfig,
+        prompts: Prompts,
+        *,
+        session: _Session | None = None,
+        sleep: Callable[[float], None] | None = None,
     ) -> None:
         self._c = config
         self._p = prompts
         self._session = session
         self._lock = threading.Lock()  # ThreadingHTTPServer 워커 동시호출 직렬화
+        if sleep is None:
+            import time
+
+            sleep = time.sleep
+        self._sleep = sleep
 
     def _get_session(self) -> _Session:
         session = self._session
@@ -61,18 +75,36 @@ class GeminiClassifier:
 
     def classify(self, image_bytes: bytes, mime: str = "image/jpeg") -> Classification:
         url = f"{self._c.api_base}/models/{self._c.model}:generateContent"
+        body = self._build_body(image_bytes, mime)
         with self._lock:  # 세션 lazy-init 경쟁 + 동시 호출 직렬화
-            resp = self._get_session().post(
-                url, json=self._build_body(image_bytes, mime), timeout=self._c.timeout_s
-            )
-        if resp.status_code != 200:
-            raise ClassificationError(f"Gemini {resp.status_code}: {resp.text[:300]}")
+            resp = self._post_with_retry(url, body)
         text = self._extract_text(resp.json())
         try:
             payload = json.loads(text)
         except json.JSONDecodeError as e:
             raise ClassificationError(f"구조화 출력 JSON 파싱 실패: {text[:200]}") from e
         return Classification.from_response(payload)
+
+    def _post_with_retry(self, url: str, body: dict) -> _Response:
+        """transient(429/5xx/네트워크) 오류에 백오프 재시도. 그 외 상태는 즉시 실패."""
+        session = self._get_session()  # 자격증명 오류는 transient 아님 → 즉시 전파
+        for attempt in range(self._c.max_retries + 1):
+            is_last = attempt == self._c.max_retries
+            try:
+                resp = session.post(url, json=body, timeout=self._c.timeout_s)
+            except Exception as e:  # noqa: BLE001 - 네트워크 오류는 transient로 재시도
+                if is_last:
+                    raise ClassificationError(f"네트워크 오류: {type(e).__name__}") from e
+                self._sleep(self._c.retry_backoff_s * (attempt + 1))
+                continue
+            if resp.status_code == 200:
+                return resp
+            if resp.status_code not in _TRANSIENT_STATUS:
+                raise ClassificationError(f"Gemini {resp.status_code}: {resp.text[:300]}")
+            if is_last:
+                raise ClassificationError(f"Gemini {resp.status_code} 재시도 소진: {resp.text[:160]}")
+            self._sleep(self._c.retry_backoff_s * (attempt + 1))
+        raise ClassificationError("재시도 소진")  # 도달 불가(루프가 항상 return/raise)
 
     def _build_body(self, image_bytes: bytes, mime: str) -> dict:
         b64 = base64.b64encode(image_bytes).decode()
