@@ -57,5 +57,10 @@ final class AppModel: ObservableObject {
         coordinator.sendOperatorCommand(type, arg: arg)
     }
 
+    // 포그라운드 복귀 시 스캔 재개(전시 무인운영). 이미 연결돼 있으면 no-op.
+    func resumeScanning() {
+        central.start()
+    }
+
     let seeds: [Seed] = SeedReward().seeds
 }

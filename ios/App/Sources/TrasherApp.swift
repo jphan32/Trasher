@@ -1,10 +1,14 @@
 // 앱 진입 + 루트 라우터. ScreenModel.screen에 따라 화면 전환.
 import SwiftUI
 import TrasherCore
+#if canImport(UIKit)
+import UIKit
+#endif
 
 @main
 struct TrasherApp: App {
     @StateObject private var app = AppModel()
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
@@ -12,6 +16,15 @@ struct TrasherApp: App {
                 .environmentObject(app)
                 .statusBarHidden()
                 .persistentSystemOverlays(.hidden)
+                .onAppear {
+                    // 키오스크: 화면 자동 잠금 비활성(전시 무인운영).
+                    #if canImport(UIKit)
+                    UIApplication.shared.isIdleTimerDisabled = true
+                    #endif
+                }
+        }
+        .onChange(of: scenePhase) { phase in
+            if phase == .active { app.resumeScanning() }  // 포그라운드 복귀 시 재연결 시도
         }
     }
 }
