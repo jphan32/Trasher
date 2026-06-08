@@ -221,29 +221,26 @@ class WasteCategory(str, Enum):
     PET = "pet"; CAN = "can"; OTHER = "other"
 ```
 
-### 4.4 API 라벨 → 3분류 정규화 (iPad `ClassificationService` 책임)
-외부 API가 미정이므로 매핑 테이블 + confidence 임계값으로 정규화한다. **Pi는 항상 3분류만 받는다.**
+### 4.4 분류 = Gemini 3.5 Flash (프록시) + 재활용 팁
+분류는 **Gemini 3.5 Flash**가 structured output(responseSchema)으로 수행한다. GCP 서비스 계정 키는
+배포되는 iPad에 두지 않고 **`/classifier` 프록시**가 보유·호출한다(iPad는 프록시 엔드포인트만 호출).
 
-```
-규칙:
-1) confidence < THRESHOLD(기본 0.50)  → other  (불확실 → 안전 기본값)
-2) 라벨 매핑(소문자/공백 정규화 후):
-     pet, plastic_bottle, pet_bottle, 페트, 플라스틱병   → pet
-     can, aluminum_can, steel_can, 캔, 알루미늄캔        → can
-     그 외 / 미매핑 / unknown                            → other
-```
-- `THRESHOLD`는 튜닝 가능. 현장 오분류 경향을 보고 조정.
-- 매핑 테이블은 실제 API 라벨 스펙 확정 시 갱신.
+프록시 응답: `{ "category": "pet|can|other", "description": "<재활용 팁(한국어)>", "confidence": 0.0~1.0 }`
+- `category`는 Gemini가 enum으로 직접 3분류 출력 → iPad `CategoryNormalizer`는 매핑+임계값(기본 0.50)으로
+  한 번 더 안전 정규화(불확실/미지 → `other`). **Pi는 항상 3분류만 받는다.**
+- `description`(재활용 팁)은 **BLE로 Pi에 보내지 않는다**(Pi는 3분류만 필요). iPad가 reward 화면에
+  부가정보로만 표시한다. 따라서 BLE `ClassificationResult`(§3.4) 계약은 불변.
 
 ### 4.5 추상화 계층
 ```swift
 protocol ClassificationService {
-    func classify(imageURL: URL) async throws -> ClassificationResult
+    func classify(imageData: Data) async throws -> RawClassification  // {label, confidence, description?}
 }
-// MockClassificationService  : 개발/데모용(고정/랜덤 결과)
-// RemoteClassificationService : 실제 API. 확정 시 이 구현만 교체.
+// MockClassificationService   : 개발/데모용(고정/회전 결과 + 캔드 팁)
+// RemoteClassificationService : /classifier(Gemini 프록시) 호출. 엔드포인트만 설정.
 ```
 앱의 나머지 코드는 mock/real을 구분하지 않는다. §4.4 정규화는 이 계층 내부에서 수행한다.
+팁(`description`)은 `SessionCoordinator.onTip` → iPad UI로 흐른다(Pi 미전달).
 
 ---
 

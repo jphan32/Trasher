@@ -6,12 +6,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 순환자원 홍보용 프로토타이핑 프로젝트. 가칭 **"AI 쓰레기 자동 분류기"** (제목은 변경될 수 있음). 전시/체험 부스에서 참여자가 쓰레기를 투입하면, AI가 종류를 판별하고 컨베이어 벨트가 자동으로 분류한 뒤, 보상으로 씨앗 상품을 제공하는 인터랙티브 데모.
 
-이 저장소는 **모노레포**다. 두 구성 요소(iPad 앱, Pi 제어 프로그램)와 공유 문서가 한 저장소에 위치한다.
+이 저장소는 **모노레포**다. 세 구성 요소(iPad 앱, Pi 제어 프로그램, 분류 프록시)와 공유 문서가 한 저장소에 위치한다.
 
 ```
-/ios    iPad 앱 (Swift / SwiftUI / CoreBluetooth)
-/pi     Raspberry Pi 제어 프로그램 (Python)
-/docs   프로토콜·설계 문서 (단일 진실 공급원)
+/ios         iPad 앱 (Swift / SwiftUI / CoreBluetooth)
+/pi          Raspberry Pi 제어 프로그램 (Python)
+/classifier  Gemini 분류 프록시 (Python) — 이미지→3분류 + 재활용 팁(structured output)
+/docs        프로토콜·설계 문서 (단일 진실 공급원)
 ```
 
 프로토콜 상수(GATT UUID, enum 등)는 `docs/protocol.md`를 단일 진실로 두고 Swift·Python 양쪽에 **수동 동기화**한다(프로토타입 단계). 한쪽을 바꾸면 반드시 양쪽과 문서를 함께 갱신한다.
@@ -23,7 +24,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | **iPad 앱** | Swift / SwiftUI / **CoreBluetooth (Central 역할)** / URLSession(HTTP) |
 | **Raspberry Pi** | Python 3 / **picamera2 + OpenCV**(카메라·비전) / **gpiozero**(서보·벨트 GPIO) / **bless**(BLE Peripheral, BlueZ/dbus) |
 | **사진 전송** | 제어·상태 = BLE 상시 연결 / **사진 = 로컬 WiFi HTTP** (Pi → iPad) |
-| **외부 분류 API** | **미정** — iPad 앱에서 추상화 계층(프로토콜) + mock으로 개발하다 실제 API 확정 시 교체 |
+| **분류 API** | **Gemini 3.5 Flash** (Vertex/Generative Language API, structured output). SA 키는 `/classifier` 프록시가 보유, iPad는 프록시 엔드포인트만 호출. 추가로 **재활용 팁(description)** 을 받아 iPad가 표시. |
 
 - **BLE 역할 고정:** iPad = Central(연결 주체, 스캔·연결), Raspberry Pi = Peripheral(GATT 서비스 광고). 이 방향은 바뀌지 않는다.
 - iPad 앱 개발에는 macOS + Xcode가 필요하며 실제 BLE 검증은 시뮬레이터가 아닌 **실기기(iPad)** 에서만 가능하다.
@@ -70,7 +71,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **BLE GATT 스펙이 두 구성 요소의 계약(contract)이다.** 제어 명령, 분류 결과, 상태/하트비트, "사진 준비됨" 알림, Pi의 `IP:port` 등 특성(characteristic) 정의를 한쪽에서 바꾸면 반드시 iPad·Pi 양쪽을 함께 수정해야 한다. (구현 전 이 GATT 스펙부터 확정할 것)
 - **사진은 BLE로 보내지 않는다.** 제어 신호만 BLE, 사진 바이너리는 WiFi HTTP. BLE로 사진을 청크 전송하려 하지 말 것 — 느리고 불안정하다.
 - **분류 카테고리 정규화는 iPad 책임.** 외부 API의 출력 라벨과 Pi가 처리하는 3분류("페트"/"캔"/"기타")는 다를 수 있다. API 라벨 → 3분류 매핑을 iPad의 `ClassificationService` 계층에서 수행하여 Pi에는 항상 3가지 중 하나만 전달한다.
-- **분류 API는 추상화 뒤에 둔다.** API 미정이므로 iPad에 `ClassificationService` 프로토콜 + `MockClassificationService`로 개발하고, 실제 API 확정 시 `RemoteClassificationService` 구현만 교체한다. 앱의 나머지 코드는 mock/real을 구분하지 않아야 한다.
+- **분류 API는 추상화 뒤에 둔다.** iPad에 `ClassificationService` 프로토콜 + `MockClassificationService`(개발/데모) / `RemoteClassificationService`(실서비스: `/classifier` Gemini 프록시 호출). 앱의 나머지 코드는 mock/real을 구분하지 않는다.
+- **분류 키는 서버 측에.** GCP 서비스 계정 키(`secret/`, gitignore됨)는 배포되는 iPad 앱에 넣지 않는다. `/classifier` 프록시가 키를 보유·Gemini 호출하고 iPad는 그 엔드포인트만 호출한다. 프록시는 인터넷+키가 있는 곳(예: Pi)에서 실행.
+- **재활용 팁은 iPad 전용 표시.** Gemini가 3분류와 함께 반환하는 `description`(재활용 팁)은 BLE로 Pi에 보내지 않고(Pi는 3분류만 필요) iPad reward 화면에 부가정보로만 표시한다. BLE 계약 불변.
 - **동기적 대기 흐름.** Pi는 결과를 받을 때까지 멈춰 대기하므로, 타임아웃/에러(HTTP 실패, API 실패, BLE 끊김) 시 폴백 동작("기타"로 처리 등)을 정의해야 한다.
 - **상시 연결 유지.** 전시 환경에서 장시간 무인 운영되므로 BLE 재연결·WiFi 재연결·상태 복구가 안정성의 핵심이다.
 
@@ -112,7 +115,20 @@ xcodebuild -project Trasher.xcodeproj -scheme Trasher -destination 'generic/plat
 ```
 
 - 코어 로직(`SessionCoordinator` = 게이팅/정합화/폴백, 분류 정규화, 프레젠테이션)은 전부 mock으로 호스트 테스트. `BLECentral`(CoreBluetooth)·SwiftUI 렌더링은 실기기/시뮬레이터 검증.
-- 외부 분류 API 미정 → `MockClassificationService`. 확정 시 `RemoteClassificationService`만 교체.
+- 분류: 개발/데모는 `MockClassificationService`, 실서비스는 `RemoteClassificationService`(→ `/classifier` Gemini 프록시). `--demo`는 카테고리·팁이 회전하는 `DemoClassifier` 사용.
+
+### classifier (`/classifier`) — Python(uv), Gemini 프록시
+
+```bash
+cd classifier && uv sync
+uv run pytest -q                       # mock 기반(네트워크 불필요)
+CLASSIFIER_CREDENTIALS=../secret/gemini-api-key.json uv run trash-classifier   # :8090
+# 라이브 스모크: CLASSIFIER_LIVE=1 ... uv run --with pillow pytest tests/test_live.py
+```
+
+- structured output(responseSchema)으로 `{category, description, confidence}` 보장. 모델 `gemini-3.5-flash`.
+- 프롬프트는 `classifier/prompts.toml`(시스템 지침+분류 프롬프트)로 코드와 분리.
+- SA 키 경로는 `CLASSIFIER_CREDENTIALS`. `secret/`는 gitignore — 절대 커밋 금지.
 
 ## 개발 워크플로 메모
 

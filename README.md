@@ -6,20 +6,24 @@
 ## 구성 (모노레포)
 
 ```
-/ios    iPad 앱 — Swift / SwiftUI / CoreBluetooth(Central)   (사용자 대면 컨트롤러·시각화)
-/pi     Raspberry Pi 제어 프로그램 — Python                  (비전·서보·벨트 하드웨어 제어)
-/docs   프로토콜·설계 문서 (단일 진실 공급원)
-/fixtures  교차언어 계약 골든 픽스처
+/ios         iPad 앱 — Swift / SwiftUI / CoreBluetooth(Central)   (사용자 대면 컨트롤러·시각화)
+/pi          Raspberry Pi 제어 프로그램 — Python                  (비전·서보·벨트 하드웨어 제어)
+/classifier  Gemini 분류 프록시 — Python                          (이미지→3분류+재활용 팁)
+/docs        프로토콜·설계 문서 (단일 진실 공급원)
+/fixtures    교차언어 계약 골든 픽스처
 ```
 
 ## 동작 (1회 분류 사이클)
 
 ```
 [Pi]   카메라 변이 감지 → 촬영 → BLE notification "사진 준비됨"
-[iPad] 사진 HTTP GET → 분류 API 호출 → 3분류(페트/캔/기타) 정규화 → BLE로 결과 전송
+[iPad] 사진 HTTP GET → /classifier(Gemini) 호출 → {3분류 + 재활용 팁} → 3분류 BLE로 전송
 [Pi]   결과 수신 → 서보로 경로 설정 → 벨트 구동 → 분리수거함 이동
-[iPad] 결과 시각화 → 씨앗 5종 랜덤 추첨 → 참여자에게 제공
+[iPad] 결과 시각화(+ 재활용 팁) → 씨앗 5종 랜덤 추첨 → 참여자에게 제공
 ```
+
+분류는 **Gemini 3.5 Flash**(structured output)가 수행한다. GCP 서비스 계정 키는 배포 iPad에 두지 않고
+`/classifier` 프록시가 보유·호출하며, iPad는 엔드포인트만 호출한다(키는 `secret/`, gitignore).
 
 두 통신 채널: **제어·상태·결과 = BLE**(상시 연결), **사진 = 로컬 WiFi HTTP**(Pi가 서버).
 계약은 [`docs/protocol.md`](docs/protocol.md)가 단일 진실 — iPad·Pi 양쪽과 함께만 변경한다.
