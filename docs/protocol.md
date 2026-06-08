@@ -9,11 +9,11 @@ iPad 앱(BLE **Central**)과 Raspberry Pi 제어 프로그램(BLE **Peripheral**
 
 ### 사진 채널 (HTTP)
 - **HTTP 서버는 Raspberry Pi에서 호스팅**한다. iPad는 클라이언트(GET pull). 이유: Pi는 상시 켜진 Linux로 견고하게 서버를 띄울 수 있는 반면, iOS 앱은 앱 생명주기(백그라운드/suspend)에 종속되어 서버 호스팅에 부적합하기 때문. 타이밍은 BLE `PhotoReady` 알림이 조율한다.
-- **네트워크 구성**: iPad·Pi 모두 **인터넷(WAN)이 연결된 동일 WiFi 라우터의 DHCP 클라이언트**(Pi-as-AP 아님). iPad는 이 라우터로 LAN(Pi 사진)과 인터넷(분류 API)을 **동시에** 사용한다. iPad가 "Pi의 WiFi"에 붙는 게 아니라, 둘 다 같은 라우터에 붙어 LAN 안에서 peer로 통신한다. Pi는 받은 IP를 BLE `DeviceInfo`로 보고하므로 별도 디스커버리가 불필요하다.
+- **네트워크 구성**: iPad·Pi 모두 **인터넷(WAN)이 연결된 동일 WiFi 라우터의 DHCP 클라이언트**(Pi-as-AP 아님). iPad는 라우터의 **LAN으로만 Pi와 통신**한다(사진 GET + 분류 `POST /classify/{cycle}`). **인터넷(Gemini 호출)은 Pi가** 사용한다 — iPad는 분류 API를 직접 부르지 않는다. iPad가 "Pi의 WiFi"에 붙는 게 아니라, 둘 다 같은 라우터에 붙어 LAN 안에서 peer로 통신한다. Pi는 받은 IP를 BLE `DeviceInfo`로 보고하므로 별도 디스커버리가 불필요하다.
 - **권장 운영**: 부스 인터넷이 불안정할 수 있으므로 **인터넷을 공급하는 전용 휴대용 라우터**(이더넷/테더링/SIM으로 WAN 공급)를 지참해 iPad·Pi를 거기에 붙이면 장소 네트워크와 무관하게 이 구조를 안정적으로 유지할 수 있다.
 - **IP 안정화**: 라우터에서 Pi MAC에 **DHCP 예약(고정 임대)** 권장. 보조로 mDNS(`sorter-01.local`) 사용 가능.
 - ⚠️ 라우터의 **AP/Client Isolation(단말 간 격리)을 OFF**, iPad·Pi가 **같은 서브넷**에 있어야 LAN HTTP가 동작한다.
-- 사진은 **LAN 내부로만** 전송(인터넷 경유 금지). 인터넷은 iPad→분류 API 호출에만 사용 — 인터넷이 끊겨도 사진 전송은 동작해야 한다.
+- 사진·분류 호출은 **LAN 내부**(iPad↔Pi). 인터넷은 **Pi→Gemini**(`/classify` 내부) 호출에만 사용 — 인터넷이 끊겨도 사진 전송·BLE 제어는 동작하고 분류만 영향받는다(Pi가 Mock/타임아웃 폴백).
 
 ---
 
@@ -177,7 +177,7 @@ iPad → Pi. 자세한 데이터 모델은 §4.
 | `sort` | `"pet"`/`"can"`/`"other"` | 수동 분류(테스트용, 즉시 서보+벨트) |
 | `belt` | `"fwd"`/`"stop"` | 벨트 수동 구동/정지(테스트) |
 | `calibrate` | — | 서보 캘리브레이션 |
-| `maintenance` | `true`/`false` | 점검 모드 진입/해제 |
+| `maintenance` | `"true"`/`"false"` | 점검 모드 진입/해제 (arg는 항상 문자열 — `Command.arg`는 String?) |
 | `estop` | — | 비상 정지(모든 모터 즉시 정지 → error) |
 
 ### 3.6 CommandAck (Notify)
@@ -262,7 +262,7 @@ protocol ClassificationService {
 ## 6. 타임아웃 & 폴백 정책
 
 - **Pi (`awaiting_result`)**: 결과 대기 타이머 기본 **15초**. 초과 시 → `category=other`로 자체 처리(`sorting`)하고 `Status.err=result_timeout`을 1회 실어 보낸 뒤 `idle` 복귀. (참여자 앞에서 멈추지 않게 함)
-- **iPad**: 사진 HTTP GET 또는 API 분류가 실패/지연되면 → `category="other"`, `confidence=0`, `raw="error"|"timeout"`로 결과를 전송. **Pi는 어떤 경우에도 결과를 받는다.**
+- **iPad**: **분류(Pi `POST /classify/{cycle}`)가 실패/지연**되면 → `category="other"`, `confidence=0`, `raw="error"|"timeout"`로 결과를 전송. 표시용 사진 GET 실패는 분류를 막지 않는다(독립 — 사진만 미표시). **Pi는 어떤 경우에도 결과를 받는다.**
 - **BLE 끊김**: iPad 자동 재연결 + 재구독 + Status로 상태 복구. Pi는 진행 중 사이클을 `reset`(끊김 감지 시) 또는 타임아웃으로 정리.
 - **앱 레벨 정지 감지**: iPad는 `Status.seq`가 6초 이상 정지하면 "Pi 응답 없음" UI 표시.
 

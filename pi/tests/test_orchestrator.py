@@ -297,3 +297,10 @@ def test_invalid_command_arg_acks_false(tmp_path, cmd_type, arg) -> None:
     orch.tick()
     assert ble.acks[-1].id == 11
     assert ble.acks[-1].ok is False
+
+
+def test_require_arg_rejects_non_string_without_crash(tmp_path) -> None:
+    # 잘못된 JSON boolean arg가 들어와도 AttributeError 없이 거부(ok=False).
+    assert Orchestrator._require_arg(True, ("true", "false")) is False  # type: ignore[arg-type]
+    assert Orchestrator._require_arg(None, ("true", "false")) is False
+    assert Orchestrator._require_arg("true", ("true", "false")) is True
