@@ -133,7 +133,7 @@ JSON 키는 짧게 유지하되 가독성을 우선한다. 모든 메시지는 M
 
 ### 3.2 Status (Notify, Read)
 ```json
-{ "state": "awaiting_result", "cycle": 42, "seq": 1083, "err": null, "lastSort": "can" }
+{ "state": "sorting", "cycle": 42, "seq": 1083, "err": null, "lastSort": "can" }
 ```
 - `state`: §2의 상태 문자열
 - `cycle`: 현재 사이클 ID(없으면 `0`)
