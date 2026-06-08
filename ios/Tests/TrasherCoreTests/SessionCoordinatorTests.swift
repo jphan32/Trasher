@@ -225,6 +225,15 @@ final class SessionCoordinatorTests: XCTestCase {
         XCTAssertEqual(link.lastCommand?.cmd, .stop)  // reward 진입 게이팅 fallback
     }
 
+    func testIdleWithoutLastSortDoesNotReward() async {
+        // 중단된 cycle: Pi가 lastSort를 클리어 → idle+cycle 일치여도 reward 아님(오인 방지).
+        let (c, _, _) = make()
+        c.connected(device)
+        await c.received(PhotoReady(cycle: 2, path: "/p/2.jpg"))  // activeCycle=2
+        c.received(Status(state: .idle, cycle: 2, seq: 9))  // lastSort 없음(중단됨)
+        if case .reward = c.state { XCTFail("lastSort 없는데 reward로 감") }
+    }
+
     func testStallDoesNotClobberReward() async {
         let (c, _, clock) = make()
         c.connected(device)

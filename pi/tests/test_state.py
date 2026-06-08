@@ -90,6 +90,41 @@ def test_maintenance_toggle() -> None:
     assert sm.state is PiState.IDLE
 
 
+def test_last_sort_is_cycle_scoped() -> None:
+    sm = StateMachine()
+    sm.start()
+    sm.begin_detection()
+    sm.begin_capture()
+    sm.photo_captured()
+    sm.result(1, WasteCategory.CAN)
+    sm.sort_complete()
+    assert sm.snapshot().last_sort is WasteCategory.CAN  # 완료 후 유지(reward 표시용)
+    sm.begin_detection()  # 새 cycle
+    assert sm.snapshot().last_sort is None  # 클리어 — 이전 결과로 오인 reward 방지
+
+
+def test_reset_and_maintenance_clear_last_sort() -> None:
+    for abort in ("reset", "maintenance"):
+        sm = StateMachine()
+        sm.start()
+        sm.begin_detection()
+        sm.begin_capture()
+        sm.photo_captured()
+        sm.result(1, WasteCategory.PET)
+        sm.sort_complete()
+        assert sm.snapshot().last_sort is WasteCategory.PET
+        # 다음 cycle을 sort 전에 중단
+        sm.begin_detection()
+        sm.begin_capture()
+        sm.photo_captured()
+        if abort == "reset":
+            sm.reset()
+        else:
+            sm.set_maintenance(True)
+            sm.set_maintenance(False)
+        assert sm.snapshot().last_sort is None  # 중단된 cycle은 결과 없음
+
+
 def test_invalid_transition_raises() -> None:
     sm = StateMachine()
     with pytest.raises(InvalidTransition):

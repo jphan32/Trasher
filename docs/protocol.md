@@ -139,7 +139,7 @@ JSON 키는 짧게 유지하되 가독성을 우선한다. 모든 메시지는 M
 - `cycle`: 현재 사이클 ID(없으면 `0`)
 - `seq`: 단조 증가 하트비트 카운터(매 notify마다 +1)
 - `err`: 에러 코드(§5) 또는 `null`
-- `lastSort`: 마지막으로 분류·이동한 카테고리(`pet`/`can`/`other`/`null`) — 시각화용
+- `lastSort`: **현재 cycle**의 분류·이동 결과(`pet`/`can`/`other`/`null`) — 시각화용. **cycle-scoped**: 새 cycle 시작(detecting)·reset·maintenance·error 시 `null`로 초기화되고, sort 시에만 설정된다. 따라서 `idle` + 일치 `cycle` + `lastSort` 존재 ⇒ "이 cycle이 실제로 sort 완료됨"을 의미(중단된 cycle은 `lastSort`가 없어 오인 reward를 막는다).
 
 ### 3.3 PhotoReady (Notify)
 ```json

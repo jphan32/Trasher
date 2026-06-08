@@ -67,6 +67,7 @@ class StateMachine:
             return False
         self._cycle += 1
         self._err = None
+        self._last_sort = None  # §2.2: lastSort는 cycle-scoped — 새 cycle 시작 시 클리어
         self._state = PiState.DETECTING
         return True
 
@@ -106,6 +107,7 @@ class StateMachine:
         """현재 사이클 중단 → idle."""
         self._pending_sort = None
         self._err = None
+        self._last_sort = None  # 중단된 사이클은 결과 없음 → 잘못된 reward 방지
         self._state = PiState.IDLE
 
     def estop(self) -> None:
@@ -114,11 +116,13 @@ class StateMachine:
     def fault(self, code: ErrorCode) -> None:
         self._err = code
         self._pending_sort = None
+        self._last_sort = None
         self._state = PiState.ERROR
 
     def set_maintenance(self, on: bool) -> None:
         if on:
             self._pending_sort = None
+            self._last_sort = None  # 점검으로 중단된 사이클은 결과 없음
             self._state = PiState.MAINTENANCE
         elif self._state is PiState.MAINTENANCE:
             self._state = PiState.IDLE
