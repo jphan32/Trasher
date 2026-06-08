@@ -70,8 +70,10 @@ final class DemoDriver: PeripheralLink {
             cycle += 1
             emit(.detecting); await sleep(0.9)
             emit(.capturing); await sleep(0.6)
+            emit(.awaitingResult); await sleep(0.3)          // AI 인식 단계
             // iPad가 사진을 받아 분류(DemoClassifier 회전) → writeResult로 pendingCategory 설정
             await coordinator?.received(PhotoReady(cycle: cycle, path: "/photos/\(cycle).jpg"))
+            await sleep(0.8)
             let category = pendingCategory                   // 분류 결과대로 sort(카테고리=팁 일치)
             emit(.sorting, lastSort: category); await sleep(1.3)
             emit(.idle, lastSort: category)                  // reward 진입

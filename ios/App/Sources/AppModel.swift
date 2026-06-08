@@ -12,6 +12,7 @@ final class AppModel: ObservableObject {
     @Published var drawnSeed: Seed?
     @Published private(set) var photo: UIImage?   // 투입된 쓰레기 사진(processing/reward 표시)
     @Published private(set) var tip: String?      // 재활용 팁(reward 부가정보)
+    @Published private(set) var step: CycleStep?  // 현재 처리 단계(촬영→AI인식→이동→분류)
     @Published private(set) var stats: SortStats   // 누적 분류 집계(어트랙트 표시)
 
     private static let statsKey = "trasher.sortStats"
@@ -74,6 +75,7 @@ final class AppModel: ObservableObject {
 
     private func apply(_ state: SessionCoordinator.SessionState) {
         model = screenModel(for: state)
+        step = cycleStep(for: state)  // 진행 스테퍼 단계
         if case .reward = state {} else { drawnSeed = nil }  // 보상 화면 떠날 때 초기화
         switch state {                                        // 대기/연결끊김 복귀 시 사진·팁 초기화
         case .attract, .disconnected:

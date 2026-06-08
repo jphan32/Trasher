@@ -11,6 +11,8 @@ struct RewardView: View {
 
     var body: some View {
         VStack(spacing: 36) {
+            StepperView(current: .sort, compact: true)  // 여정 완료
+                .padding(.top, 20).padding(.horizontal, 60)
             // 투입된 쓰레기 사진(있으면)
             if let photo = app.photo {
                 Image(uiImage: photo).resizable().scaledToFill()
@@ -33,17 +35,7 @@ struct RewardView: View {
 
             // 재활용 팁(부가정보) — Gemini가 제공
             if let tip = app.tip, !tip.isEmpty {
-                HStack(alignment: .top, spacing: 12) {
-                    Text("💡").font(.system(size: 30))
-                    Text(tip)
-                        .font(Theme.body(24))
-                        .foregroundStyle(Theme.ink)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .padding(20)
-                .frame(maxWidth: 640)
-                .background(Theme.sprout.opacity(0.14), in: RoundedRectangle(cornerRadius: 20))
-                .padding(.horizontal, 32)
+                TipBox(text: tip).padding(.horizontal, 32)
             }
 
             Divider().frame(width: 320).overlay(Theme.paperDeep)

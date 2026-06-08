@@ -44,32 +44,39 @@ struct AttractView: View {
 struct ProcessingView: View {
     let model: ScreenModel
     @EnvironmentObject var app: AppModel
-    @State private var spin = false
+    @State private var float = false
 
     var body: some View {
-        VStack(spacing: 48) {
+        VStack(spacing: 28) {
+            StepperView(current: app.step ?? .capture)
+                .padding(.top, 28).padding(.horizontal, 44)
             Spacer()
+            // 현재 처리중인 쓰레기 사진 카드(폴라로이드 느낌)
             ZStack {
-                Circle().stroke(Theme.paperDeep, lineWidth: 14).frame(width: 220, height: 220)
-                Circle().trim(from: 0, to: 0.28)
-                    .stroke(Theme.sprout, style: StrokeStyle(lineWidth: 14, lineCap: .round))
-                    .frame(width: 220, height: 220)
-                    .rotationEffect(.degrees(spin ? 360 : 0))
-                    .animation(.linear(duration: 1).repeatForever(autoreverses: false), value: spin)
-                // 투입된 쓰레기 사진(있으면 원형 마스크로 표시), 없으면 새싹 아이콘
+                RoundedRectangle(cornerRadius: 28).fill(.white)
+                    .overlay(RoundedRectangle(cornerRadius: 28).stroke(Theme.paperDeep, lineWidth: 4))
+                    .shadow(color: Theme.ink.opacity(0.12), radius: 18, y: 10)
                 if let photo = app.photo {
                     Image(uiImage: photo).resizable().scaledToFill()
-                        .frame(width: 180, height: 180).clipShape(Circle())
+                        .clipShape(RoundedRectangle(cornerRadius: 22)).padding(12)
                 } else {
-                    Image(systemName: "leaf.fill").font(.system(size: 72)).foregroundStyle(Theme.sprout)
+                    Image(systemName: "camera.viewfinder")
+                        .font(.system(size: 96)).foregroundStyle(Theme.sprout.opacity(0.6))
                 }
             }
-            Text(model.title).font(Theme.title(56)).foregroundStyle(Theme.ink)
+            .frame(width: 300, height: 300)
+            .offset(y: float ? -8 : 8)
+            .animation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true), value: float)
+
+            Text(model.title).font(Theme.title(46)).foregroundStyle(Theme.ink)
                 .multilineTextAlignment(.center)
-            Text(model.subtitle).font(Theme.body(28)).foregroundStyle(Theme.inkSoft)
+            // AI 설명(재활용 팁) — 인식 후 사진과 함께 표시
+            if let tip = app.tip, !tip.isEmpty {
+                TipBox(text: tip).padding(.horizontal, 32)
+            }
             Spacer()
         }
-        .onAppear { spin = true }
+        .onAppear { float = true }
     }
 }
 
