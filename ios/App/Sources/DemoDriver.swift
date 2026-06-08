@@ -34,7 +34,7 @@ final class DemoClassifier: ClassificationService, @unchecked Sendable {
         ("can", "캔은 내용물을 비우고 물로 헹군 뒤 납작하게 만들어 캔류로 배출해요."),
         ("other", "재활용이 어려운 일반 쓰레기는 종량제 봉투에 배출해요."),
     ]
-    func classify(imageData: Data) async throws -> RawClassification {
+    func classify(cycle: Int, on device: DeviceInfo) async throws -> RawClassification {
         let item = lock.withLock { () -> (String, String) in
             let picked = items[index % items.count]
             index += 1

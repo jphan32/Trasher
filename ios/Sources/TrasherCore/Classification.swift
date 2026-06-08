@@ -17,10 +17,10 @@ public struct RawClassification: Equatable, Sendable {
     }
 }
 
-/// 분류 서비스 추상화. 이미지 바이트 → 원시 분류.
-/// (iPad가 사진을 표시·분류 양쪽에 쓰므로 URL이 아닌 이미 받은 Data를 받는다.)
+/// 분류 서비스 추상화. **cycle 기반** — 이미지를 재업로드하지 않고 Pi에 cycle ID만 보낸다.
+/// Pi가 로컬 사진(이미 보유)을 읽어 Gemini로 분류하므로 트래픽이 최소화된다.
 public protocol ClassificationService: Sendable {
-    func classify(imageData: Data) async throws -> RawClassification
+    func classify(cycle: Int, on device: DeviceInfo) async throws -> RawClassification
 }
 
 /// 개발/데모용 Mock. 고정 결과 + 캔드 팁을 반환한다.
@@ -33,7 +33,7 @@ public struct MockClassificationService: ClassificationService {
     ) {
         self.fixed = RawClassification(label: label, confidence: confidence, description: description)
     }
-    public func classify(imageData: Data) async throws -> RawClassification {
+    public func classify(cycle: Int, on device: DeviceInfo) async throws -> RawClassification {
         fixed
     }
 }

@@ -26,7 +26,7 @@ private struct SlowFetcher: PhotoFetcher {
 }
 
 private struct ThrowingClassifier: ClassificationService {
-    func classify(imageData: Data) async throws -> RawClassification {
+    func classify(cycle: Int, on device: DeviceInfo) async throws -> RawClassification {
         throw PhotoFetchError.badURL
     }
 }

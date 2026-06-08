@@ -156,12 +156,14 @@ public final class SessionCoordinator {
         let result: ClassificationResult
         var tip: String?
         do {
-            // 사진 먼저 받아 표시(분류 실패/타임아웃과 무관하게 UI에 사진을 보여준다).
+            // 사진 먼저 받아 표시(분류와 무관하게 UI에 사진을 보여준다).
             let data = try await withTimeout(resultDeadline) { try await fetcher.fetch(photo, from: device) }
             onPhotoData?(data)
-            // 남은 예산으로 분류 — 총 deadline이 Pi 15초를 넘지 않게.
+            // 분류는 cycle 기반 — Pi가 로컬 사진을 읽으므로 이미지를 재업로드하지 않는다.
             let remaining = max(0.1, resultDeadline - clock().timeIntervalSince(start))
-            let raw = try await withTimeout(remaining) { try await classifier.classify(imageData: data) }
+            let raw = try await withTimeout(remaining) {
+                try await classifier.classify(cycle: myCycle, on: device)
+            }
             tip = raw.description           // 재활용 팁(부가정보)
             result = normalizer.normalize(raw, cycle: myCycle)
         } catch {
