@@ -76,11 +76,15 @@ def load_frames(directory: str | Path) -> list[Frame]:
     try:
         import cv2  # type: ignore[import-not-found]
     except ImportError as e:  # pragma: no cover - Pi 전용
-        raise RuntimeError("이미지 로드에는 opencv가 필요합니다(Pi: pip install -r requirements-pi.txt)") from e
+        raise RuntimeError(
+            "이미지 로드에는 opencv가 필요합니다(Pi: pip install -r requirements-pi.txt)"
+        ) from e
     return [cv2.imread(str(p), cv2.IMREAD_GRAYSCALE) for p in images]  # pragma: no cover
 
 
-def run_cli(directory: str, *, threshold: float = 0.02, pixel_delta: int = 25) -> None:  # pragma: no cover
+def run_cli(  # pragma: no cover
+    directory: str, *, threshold: float = 0.02, pixel_delta: int = 25
+) -> None:
     frames = load_frames(directory)
     stats = analyze(frames, threshold=threshold, pixel_delta=pixel_delta)
     print(f"# {len(frames)} frames, threshold={threshold}, pixel_delta={pixel_delta}")
