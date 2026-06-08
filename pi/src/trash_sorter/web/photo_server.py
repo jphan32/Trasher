@@ -1,19 +1,26 @@
-"""로컬 WiFi 사진 HTTP 서버. docs/protocol.md §"사진 채널", §3.3.
+"""로컬 WiFi 사진 HTTP 서버 + 분류 엔드포인트. docs/protocol.md §"사진 채널", §3.3, §4.4.
 
 - ``PhotoStore``: cycle별 사진 경로 + 순환 보관(최근 N장).
-- ``PhotoServer``: ``GET /photos/{cycle}.jpg``만 서빙(디렉터리 리스팅·경로탈출 차단).
+- ``PhotoServer``:
+  - ``GET /photos/{cycle}.jpg`` — 사진 서빙(디렉터리 리스팅·경로탈출 차단).
+  - ``POST /classify/{cycle}`` — 로컬 사진을 읽어 분류기(Gemini/Mock) 호출.
+    응답: {category, description, confidence}. iPad는 이미지 대신 cycle ID만 보낸다(재업로드 없음).
 - ``get_lan_ip``: DeviceInfo로 광고할 LAN IP 자동 감지.
 """
 
 from __future__ import annotations
 
+import json
 import re
 import socket
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+from ..classify import Classifier
+
 _PHOTO_RE = re.compile(r"/photos/(\d+)\.jpg")
+_CLASSIFY_RE = re.compile(r"/classify/(\d+)")
 
 
 def get_lan_ip() -> str:
@@ -48,7 +55,9 @@ class PhotoStore:
             p.unlink(missing_ok=True)
 
 
-def _make_handler(store: PhotoStore) -> type[BaseHTTPRequestHandler]:
+def _make_handler(
+    store: PhotoStore, classifier: Classifier | None
+) -> type[BaseHTTPRequestHandler]:
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
             m = _PHOTO_RE.fullmatch(self.path)
@@ -66,10 +75,43 @@ def _make_handler(store: PhotoStore) -> type[BaseHTTPRequestHandler]:
             self.send_header("Content-Type", "image/jpeg")
             self.send_header("Content-Length", str(len(data)))
             self.end_headers()
+            self._write(data)
+
+        def do_POST(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
+            # POST /classify/{cycle} — 로컬 사진을 읽어 분류(이미지 재업로드 없음)
+            m = _CLASSIFY_RE.fullmatch(self.path)
+            if not m:
+                self.send_error(404)
+                return
+            if classifier is None:
+                self._json(503, {"error": "classifier not configured"})
+                return
+            path = store.path_for(int(m.group(1)))
+            try:
+                data = path.read_bytes()
+            except OSError:
+                self.send_error(404)
+                return
+            try:
+                result = classifier.classify(data)
+            except Exception as e:  # noqa: BLE001 - 분류 실패는 502로
+                self._json(502, {"error": str(e)[:300]})
+                return
+            self._json(200, result.to_dict())
+
+        def _json(self, status: int, payload: dict) -> None:
+            body = json.dumps(payload, ensure_ascii=False).encode()
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self._write(body)
+
+        def _write(self, data: bytes) -> None:
             try:
                 self.wfile.write(data)
             except (BrokenPipeError, ConnectionResetError):
-                # iPad가 전송 도중 취소(타임아웃/백그라운드) — 조용히 종료, 트레이스백 없음
+                # 클라이언트가 전송 도중 취소 — 조용히 종료, 트레이스백 없음
                 pass
 
         def log_message(self, *args: object) -> None:  # 조용히
@@ -79,9 +121,12 @@ def _make_handler(store: PhotoStore) -> type[BaseHTTPRequestHandler]:
 
 
 class PhotoServer:
-    def __init__(self, store: PhotoStore, port: int = 8080, host: str = "0.0.0.0") -> None:
+    def __init__(
+        self, store: PhotoStore, port: int = 8080, host: str = "0.0.0.0",
+        classifier: Classifier | None = None,
+    ) -> None:
         self._store = store
-        self._httpd = ThreadingHTTPServer((host, port), _make_handler(store))
+        self._httpd = ThreadingHTTPServer((host, port), _make_handler(store, classifier))
         self._thread: threading.Thread | None = None
 
     @property

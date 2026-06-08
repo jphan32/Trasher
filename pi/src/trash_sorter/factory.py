@@ -12,6 +12,7 @@ from pathlib import Path
 
 from .app import Orchestrator
 from .ble.base import BleServer
+from .classify import build_classifier
 from .config import Settings, load_settings
 from .hardware.base import HardwareController
 from .protocol import DeviceInfo
@@ -83,7 +84,9 @@ def build_app(settings: Settings | None = None, *, mock: bool | None = None) -> 
 
     photo_dir = tempfile.mkdtemp(prefix="trash-photos-") if use_mock else "/var/tmp/trash-photos"
     store = PhotoStore(photo_dir, retention=settings.network.photo_retention)
-    photo_server = PhotoServer(store, port=settings.network.http_port)
+    # 분류기: SA 키 있으면 Gemini, 없으면 Mock(dev/sim). 사진서버 /classify에서 사용.
+    classifier = build_classifier()
+    photo_server = PhotoServer(store, port=settings.network.http_port, classifier=classifier)
 
     hardware = _build_hardware(settings, use_mock)
     camera = _build_camera(settings, use_mock)

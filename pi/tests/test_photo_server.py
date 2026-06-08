@@ -2,12 +2,20 @@
 
 from __future__ import annotations
 
+import json
 import urllib.error
 import urllib.request
 
 import pytest
 
+from trash_sorter.classify import MockClassifier
 from trash_sorter.web import PhotoServer, PhotoStore, get_lan_ip
+
+
+def _post(url: str):
+    return urllib.request.urlopen(
+        urllib.request.Request(url, data=b"", method="POST"), timeout=2
+    )
 
 
 def test_store_path_and_url(tmp_path) -> None:
@@ -62,3 +70,44 @@ def test_get_lan_ip_returns_ipv4() -> None:
     ip = get_lan_ip()
     parts = ip.split(".")
     assert len(parts) == 4 and all(p.isdigit() for p in parts)
+
+
+def test_classify_endpoint_returns_result(tmp_path) -> None:
+    store = PhotoStore(tmp_path / "photos")
+    store.path_for(3).write_bytes(b"\xff\xd8jpeg\xff\xd9")
+    server = PhotoServer(store, port=0, host="127.0.0.1", classifier=MockClassifier())
+    server.start()
+    try:
+        with _post(f"http://127.0.0.1:{server.port}/classify/3") as resp:
+            assert resp.status == 200
+            body = json.loads(resp.read())
+        assert body["category"] in {"pet", "can", "other"}
+        assert body["description"]  # 재활용 팁
+        assert 0.0 <= body["confidence"] <= 1.0
+    finally:
+        server.stop()
+
+
+def test_classify_missing_photo_404(tmp_path) -> None:
+    store = PhotoStore(tmp_path / "photos")
+    server = PhotoServer(store, port=0, host="127.0.0.1", classifier=MockClassifier())
+    server.start()
+    try:
+        with pytest.raises(urllib.error.HTTPError) as exc:
+            _post(f"http://127.0.0.1:{server.port}/classify/999")
+        assert exc.value.code == 404
+    finally:
+        server.stop()
+
+
+def test_classify_without_classifier_503(tmp_path) -> None:
+    store = PhotoStore(tmp_path / "photos")
+    store.path_for(1).write_bytes(b"\xff\xd8")
+    server = PhotoServer(store, port=0, host="127.0.0.1")  # classifier=None
+    server.start()
+    try:
+        with pytest.raises(urllib.error.HTTPError) as exc:
+            _post(f"http://127.0.0.1:{server.port}/classify/1")
+        assert exc.value.code == 503
+    finally:
+        server.stop()
