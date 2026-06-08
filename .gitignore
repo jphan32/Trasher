@@ -23,3 +23,6 @@ __pycache__/
 build/
 dist/
 
+
+# 비밀 — GCP 서비스 계정 키 등 (절대 커밋 금지)
+secret/

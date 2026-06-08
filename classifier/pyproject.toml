@@ -1,0 +1,43 @@
+[project]
+name = "trash-classifier"
+version = "0.1.0"
+description = "쓰레기 이미지 3종 분류 + 재활용 팁 — Gemini(Vertex AI) 분류 프록시 서비스"
+requires-python = ">=3.11"
+dependencies = [
+    "google-auth>=2.30",
+    "requests>=2.31",
+    "flask>=3.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "ruff>=0.6",
+    "mypy>=1.10",
+]
+
+[project.scripts]
+trash-classifier = "trash_classifier.__main__:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.11"
+packages = ["trash_classifier"]
+mypy_path = "src"
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
