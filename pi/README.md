@@ -38,9 +38,25 @@ src/trash_sorter/
   hardware/        # 서보3/벨트1: 인터페이스 + Mock/gpiozero + sort 시퀀스
   vision/          # 카메라 + 변이검출: 인터페이스 + Mock/picamera2
   ble/             # BLE Peripheral: 인터페이스 + Mock/bless
-  http/            # 사진 HTTP 서버
+  web/             # 사진 HTTP 서버
   app.py           # 오케스트레이터 (전 구성요소 결선 + 사이클 루프)
+  sim.py           # 시뮬레이션 모드(--simulate)
+  factory.py       # 플랫폼 분기 조립
 ```
 
 설계 원칙: 모든 하드웨어/비전/BLE는 **인터페이스 뒤의 Mock**으로 macOS에서 검증 가능. 실기기 구현은
 플랫폼에서만 import. 자세한 개발 사이클은 [`../docs/dev-cycle.md`](../docs/dev-cycle.md).
+
+## 배포 (Raspberry Pi, systemd)
+
+부스 무인 기동: 저장소를 Pi에 복사한 뒤,
+
+```bash
+sudo bash pi/deploy/install.sh   # 코드→/opt/trash-sorter, uv sync + 하드웨어 extras, systemd 등록·시작
+sudo nano /etc/trash-sorter.env  # 현장 튜닝값(핀/임계값/IP) — deploy/trash-sorter.env.example 참조
+sudo systemctl restart trash-sorter
+journalctl -u trash-sorter -f    # 로그
+```
+
+- 죽으면 자동 재시작(`Restart=always`), 부팅 시 자동 기동(`enable`).
+- 하드웨어 없이 점검: `uv run trash-sorter --simulate` (사이클 로깅) / `uv run trash-sorter --tune <frames_dir>` (임계값 보정).
