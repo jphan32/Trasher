@@ -11,7 +11,7 @@ final class AppModel: ObservableObject {
     private let coordinator: SessionCoordinator
     private let central = BLECentral()
     private let seedReward = SeedReward()
-    private var heartbeatTimer: Timer?
+    private var heartbeatTask: Task<Void, Never>?
 
     init() {
         let central = self.central
@@ -26,8 +26,13 @@ final class AppModel: ObservableObject {
             self?.apply(state)
         }
         central.start()
-        heartbeatTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.coordinator.checkHeartbeat() }
+        // weak self 반복 Task — self 해제 시 자동 종료(별도 deinit 정리 불필요).
+        heartbeatTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                guard let self else { return }
+                self.coordinator.checkHeartbeat()
+            }
         }
     }
 

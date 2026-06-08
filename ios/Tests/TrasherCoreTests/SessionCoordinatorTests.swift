@@ -18,6 +18,13 @@ private struct FailFetcher: PhotoFetcher {
     }
 }
 
+private struct SlowFetcher: PhotoFetcher {
+    func fetch(_ photo: PhotoReady, from device: DeviceInfo) async throws -> Data {
+        try await Task.sleep(nanoseconds: 1_000_000_000)  // deadline보다 김
+        return Data()
+    }
+}
+
 @MainActor
 final class SessionCoordinatorTests: XCTestCase {
     private let device = DeviceInfo(fw: "0.1.0", ip: "127.0.0.1", port: 8080)
@@ -26,7 +33,8 @@ final class SessionCoordinatorTests: XCTestCase {
         fetcher: PhotoFetcher = OKFetcher(data: Data([0xFF, 0xD8])),
         label: String = "pet",
         confidence: Double = 0.95,
-        clock: FakeClock = FakeClock()
+        clock: FakeClock = FakeClock(),
+        resultDeadline: TimeInterval = 12.0
     ) -> (SessionCoordinator, MockPeripheralLink, FakeClock) {
         let link = MockPeripheralLink()
         let c = SessionCoordinator(
@@ -34,7 +42,8 @@ final class SessionCoordinatorTests: XCTestCase {
             fetcher: fetcher,
             classifier: MockClassificationService(label: label, confidence: confidence),
             normalizer: CategoryNormalizer(),
-            clock: { clock.now }
+            clock: { clock.now },
+            resultDeadline: resultDeadline
         )
         return (c, link, clock)
     }
@@ -74,14 +83,54 @@ final class SessionCoordinatorTests: XCTestCase {
         XCTAssertEqual(link.lastCommand?.cmd, .start)  // 감지 재개
     }
 
-    func testRewardStaysDuringIdleHeartbeats() {
+    func testRewardStaysDuringIdleHeartbeats() async {
         let (c, _, _) = make()
         c.connected(device)
+        await c.received(PhotoReady(cycle: 1, path: "/p/1.jpg"))  // activeCycle=1
         c.received(Status(state: .sorting, cycle: 1, seq: 1, lastSort: .can))
         c.received(Status(state: .idle, cycle: 1, seq: 2, lastSort: .can))
         XCTAssertEqual(c.state, .reward(.can))
         c.received(Status(state: .idle, cycle: 1, seq: 3, lastSort: .can))  // 하트비트
         XCTAssertEqual(c.state, .reward(.can))  // 어트랙트로 되돌아가지 않음
+    }
+
+    func testGatingStopSentOnSortingEntry() async {
+        let (c, link, _) = make()
+        c.connected(device)
+        await c.received(PhotoReady(cycle: 1, path: "/p/1.jpg"))  // activeCycle=1
+        let before = link.commands.filter { $0.cmd == .stop }.count
+        c.received(Status(state: .sorting, cycle: 1, seq: 2, lastSort: .pet))
+        XCTAssertEqual(link.commands.filter { $0.cmd == .stop }.count, before + 1)  // 진입 시 1회
+        c.received(Status(state: .sorting, cycle: 1, seq: 3, lastSort: .pet))  // 중복 stop 안 보냄
+        XCTAssertEqual(link.commands.filter { $0.cmd == .stop }.count, before + 1)
+    }
+
+    func testCycleMismatchDoesNotReward() async {
+        let (c, _, _) = make()
+        c.connected(device)
+        await c.received(PhotoReady(cycle: 1, path: "/p/1.jpg"))  // activeCycle=1
+        c.received(Status(state: .sorting, cycle: 2, seq: 2, lastSort: .pet))  // 다른 cycle
+        c.received(Status(state: .idle, cycle: 2, seq: 3, lastSort: .pet))
+        if case .reward = c.state { XCTFail("cycle 불일치인데 reward로 감") }
+    }
+
+    func testResultDeadlineFallsBackToTimeout() async {
+        let (c, link, _) = make(fetcher: SlowFetcher(), resultDeadline: 0.05)
+        c.connected(device)
+        await c.received(PhotoReady(cycle: 8, path: "/p/8.jpg"))
+        XCTAssertEqual(link.lastResult?.category, .other)  // §6 deadline 폴백
+        XCTAssertEqual(link.lastResult?.raw, "timeout")
+        XCTAssertEqual(link.lastResult?.cycle, 8)
+    }
+
+    func testIncompatibleStickyIgnoresTraffic() async {
+        let (c, link, _) = make()
+        c.connected(DeviceInfo(fw: "x", ip: "1.2.3.4", port: 8080, name: "s", proto: 2))
+        XCTAssertEqual(c.state, .incompatible(proto: 2))
+        c.received(Status(state: .idle, cycle: 0, seq: 1))
+        XCTAssertEqual(c.state, .incompatible(proto: 2))  // 덮어쓰지 않음
+        await c.received(PhotoReady(cycle: 1, path: "/p/1.jpg"))
+        XCTAssertNil(link.lastResult)  // photo 무시
     }
 
     func testReconciliationFollowsPiLastSort() async {
