@@ -83,10 +83,32 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - 3분류 enum: `pet`/`can`/`other`(`other`는 안전 기본값). API 라벨→3분류 정규화와 confidence 임계값은 iPad `ClassificationService`가 담당.
 - 타임아웃 시 양쪽 모두 `other`로 폴백 — Pi는 어떤 경우에도 결과를 받는다.
 
+## 빌드/테스트 명령
+
+### Pi (`/pi`) — Python, **uv로 환경 관리**
+
+Python 환경·의존성은 반드시 **uv**로 관리한다(`pip`/`python -m venv` 직접 사용 금지). 모든 하드웨어/비전/BLE는 인터페이스+Mock으로 추상화돼 있어 **macOS에서 전 테스트가 통과**한다.
+
+```bash
+cd pi
+uv sync               # .venv + 크로스플랫폼 의존성 + dev 도구([dependency-groups])
+uv run pytest -q      # 테스트(전부 mock 기반)
+uv run ruff check .   # 린트
+uv run mypy           # 타입체크
+uv run trash-sorter   # 실행(실기기)
+```
+
+- 하드웨어 의존(picamera2/gpiozero/bless)은 **Linux 전용 sdist라 macOS uv 해석을 깨뜨린다**. 따라서 pyproject가 아니라 `pi/requirements-pi.txt`로 분리하고, Pi에서만 `uv pip install -r requirements-pi.txt`로 설치한다.
+- 새 의존성 추가는 `uv add <pkg>`(런타임) / `uv add --dev <pkg>`(개발). `uv.lock`은 커밋한다.
+
+### iPad (`/ios`) — Swift/SwiftUI
+
+(스캐폴딩 시 추가)
+
 ## 개발 워크플로 메모
 
-- 상세 설계는 개발 진행 중 사용자가 추가로 전달한다. **구현 전 `docs/protocol.md`(BLE GATT 스펙·분류 데이터 모델)를 먼저 확정**하는 것이 안전하다.
-- 빌드/테스트/실행 명령은 각 구성 요소의 프로젝트 스캐폴딩(Xcode 프로젝트 / Python 패키지)이 생성되면 이 문서에 추가한다. (현재 스캐폴딩 전)
+- 상세 설계는 개발 진행 중 사용자가 추가로 전달한다. 통신/데이터 모델 변경 전 `docs/protocol.md`를 먼저 갱신한다.
+- 개발 사이클(기획-설계-구현-테스트-리뷰, ralph-loop 도달목표/`<promise>` 종료)은 `docs/dev-cycle.md` 참조.
 
 
 <!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:7510c1e2 -->

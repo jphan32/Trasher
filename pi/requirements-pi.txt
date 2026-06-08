@@ -1,0 +1,11 @@
+# Raspberry Pi(Linux) 전용 하드웨어 의존성.
+# macOS/CI에서는 설치하지 않는다(Mock 구현으로 동작). pyproject가 아닌 별도 파일로 관리하는 이유:
+# 이 패키지들의 sdist는 Linux에서만 빌드되어 uv universal 해석을 깨뜨리기 때문.
+#
+# Pi에서 설치:
+#   uv sync                              # 크로스플랫폼 + dev 도구
+#   uv pip install -r requirements-pi.txt  # 하드웨어 의존성
+picamera2
+opencv-python-headless
+gpiozero
+bless

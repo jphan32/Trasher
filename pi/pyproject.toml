@@ -4,23 +4,19 @@ version = "0.1.0"
 description = "AI 쓰레기 자동 분류기 — Raspberry Pi 제어 프로그램 (BLE Peripheral + HTTP 사진서버 + 비전 + 서보/벨트)"
 requires-python = ">=3.11"
 dependencies = [
-    # 플랫폼 무관 핵심 의존성만. 하드웨어 의존성은 [pi] extra 참조.
+    "numpy",  # 프레임차분 변이검출(opencv 불필요, 플랫폼 무관)
 ]
 
-[project.optional-dependencies]
-# Raspberry Pi(Linux)에서만 설치. macOS 개발/CI에서는 설치하지 않고 Mock 구현으로 동작.
-pi = [
-    "picamera2; platform_system == 'Linux'",
-    "opencv-python-headless; platform_system == 'Linux'",
-    "gpiozero; platform_system == 'Linux'",
-    "bless; platform_system == 'Linux'",
-    "numpy",
-]
+# 하드웨어 의존(picamera2/gpiozero/bless)은 Linux 전용이며 sdist가 macOS에서 빌드되지 않는다
+# (python-prctl 등). uv universal 해석에서 분리하기 위해 pyproject가 아닌 requirements-pi.txt로
+# 관리한다. Pi에서: `uv sync && uv pip install -r requirements-pi.txt`. 자세히는 README 참조.
+
+# uv 기본 설치 그룹(PEP 735). `uv sync`만으로 설치된다.
+[dependency-groups]
 dev = [
     "pytest>=8",
     "ruff>=0.6",
     "mypy>=1.10",
-    "numpy",
 ]
 
 [project.scripts]

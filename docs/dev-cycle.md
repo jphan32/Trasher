@@ -52,6 +52,6 @@ docs/dev-cycle.md의 5단계 사이클을 따른다.
 
 ## 품질 게이트
 
-- Pi: `ruff check`, `mypy`, `pytest` 전부 통과(모두 mac에서 mock으로 실행 가능).
+- Pi: `uv run ruff check .`, `uv run mypy`, `uv run pytest` 전부 통과(모두 mac에서 mock으로 실행 가능). 환경은 uv 전용.
 - 커밋 단위: 이슈 1개 = 1커밋(가능하면). 메시지에 `(trash-xxx)` 이슈 ID 포함.
 - 세션 종료 시 `git push`(CLAUDE.md 세션 프로토콜 준수).
