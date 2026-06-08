@@ -1,0 +1,165 @@
+"""오케스트레이터 통합 테스트 (전부 mock + 페이크 클락). docs/protocol.md §2,§2.1,§6."""
+
+from __future__ import annotations
+
+import pytest
+
+from trash_sorter.app import Orchestrator
+from trash_sorter.ble import MockBleServer
+from trash_sorter.config import Settings
+from trash_sorter.hardware import MockHardware
+from trash_sorter.protocol import (
+    ClassificationResult,
+    Command,
+    CommandType,
+    ErrorCode,
+    PiState,
+    WasteCategory,
+)
+from trash_sorter.state import StateMachine
+from trash_sorter.vision import MockCamera, MotionDetector
+from trash_sorter.vision.mock import blank
+from trash_sorter.web.photo_server import PhotoStore
+
+
+class FakeClock:
+    def __init__(self) -> None:
+        self.t = 0.0
+
+    def __call__(self) -> float:
+        return self.t
+
+    def advance(self, dt: float) -> None:
+        self.t += dt
+
+
+def build(tmp_path, frames):
+    clock = FakeClock()
+    ble = MockBleServer()
+    hw = MockHardware()
+    orch = Orchestrator(
+        settings=Settings(),
+        state=StateMachine(),
+        camera=MockCamera(frames=frames),
+        motion=MotionDetector(threshold=0.02),
+        hardware=hw,
+        ble=ble,
+        store=PhotoStore(tmp_path / "photos"),
+        clock=clock,
+        sleep=lambda _s: None,
+    )
+    return orch, ble, hw, clock
+
+
+def _motion_frames(n_static: int = 6):
+    # blank0 → (motion) blank255, 이후 정지 프레임 다수
+    return [blank(0), blank(255), *[blank(255)] * n_static]
+
+
+def test_gating_no_detection_until_started(tmp_path) -> None:
+    orch, ble, _hw, clock = build(tmp_path, _motion_frames())
+    for _ in range(4):  # START 안 보냄
+        orch.tick()
+        clock.advance(0.1)
+    assert orch._sm.state is PiState.IDLE  # noqa: SLF001
+    assert ble.photos == []
+
+
+def _run_full_cycle(orch, ble, clock, category):
+    ble.simulate_command(Command(cmd=CommandType.START, id=1))
+    orch.tick()  # START 처리
+    orch.tick()  # blank0 읽음(첫 프레임, 변이 없음)
+    orch.tick()  # blank255 → 변이 감지 → DETECTING
+    assert orch._sm.state is PiState.DETECTING  # noqa: SLF001
+    clock.advance(0.6)  # settle_seconds(0.5) 경과
+    orch.tick()  # 촬영 → AWAITING_RESULT + PhotoReady
+    assert orch._sm.state is PiState.AWAITING_RESULT  # noqa: SLF001
+    cycle = orch._sm.cycle  # noqa: SLF001
+    ble.simulate_result(ClassificationResult(cycle=cycle, category=category, confidence=0.9))
+    orch.tick()  # 결과 수신 → SORTING
+    orch.tick()  # sort 수행 → IDLE
+    return cycle
+
+
+def test_full_cycle_pet(tmp_path) -> None:
+    orch, ble, hw, clock = build(tmp_path, _motion_frames())
+    cycle = _run_full_cycle(orch, ble, clock, WasteCategory.PET)
+
+    assert cycle == 1
+    assert orch._sm.state is PiState.IDLE  # noqa: SLF001
+    # PhotoReady 발행
+    assert len(ble.photos) == 1
+    assert ble.photos[0].cycle == 1
+    assert ble.photos[0].path == "/photos/1.jpg"
+    # 분기 경로 = 좌(pet)
+    assert "route:left" in hw.calls
+    assert hw.calls[-1] == "route:center"  # 중립 복귀
+    # 최종 status: sorting 결과 반영
+    assert ble.last_status is not None
+    assert ble.last_status.last_sort is WasteCategory.PET
+
+
+@pytest.mark.parametrize(
+    "category,route",
+    [(WasteCategory.PET, "left"), (WasteCategory.CAN, "right"), (WasteCategory.OTHER, "center")],
+)
+def test_full_cycle_routes(tmp_path, category, route) -> None:
+    orch, ble, hw, clock = build(tmp_path, _motion_frames())
+    _run_full_cycle(orch, ble, clock, category)
+    assert f"route:{route}" in hw.calls
+
+
+def test_result_timeout_falls_back_to_other(tmp_path) -> None:
+    orch, ble, hw, clock = build(tmp_path, _motion_frames())
+    ble.simulate_command(Command(cmd=CommandType.START, id=1))
+    for _ in range(3):
+        orch.tick()  # → DETECTING
+    clock.advance(0.6)
+    orch.tick()  # → AWAITING_RESULT
+    assert orch._sm.state is PiState.AWAITING_RESULT  # noqa: SLF001
+
+    clock.advance(15.1)  # result_timeout_s(15) 초과, 결과 안 보냄
+    orch.tick()  # 타임아웃 → SORTING(other)
+    assert ble.last_status is not None
+    assert ble.last_status.err is ErrorCode.RESULT_TIMEOUT
+    orch.tick()  # sort → IDLE
+    assert "route:center" in hw.calls  # other = 중앙
+    assert orch._sm.state is PiState.IDLE  # noqa: SLF001
+
+
+def test_stale_result_ignored(tmp_path) -> None:
+    orch, ble, _hw, clock = build(tmp_path, _motion_frames())
+    ble.simulate_command(Command(cmd=CommandType.START, id=1))
+    for _ in range(3):
+        orch.tick()
+    clock.advance(0.6)
+    orch.tick()  # AWAITING_RESULT, cycle=1
+    ble.simulate_result(ClassificationResult(cycle=99, category=WasteCategory.CAN, confidence=0.9))
+    orch.tick()
+    assert orch._sm.state is PiState.AWAITING_RESULT  # noqa: SLF001  (폐기됨)
+
+
+def test_estop_command(tmp_path) -> None:
+    orch, ble, hw, _clock = build(tmp_path, _motion_frames())
+    ble.simulate_command(Command(cmd=CommandType.ESTOP, id=5))
+    orch.tick()
+    assert orch._sm.state is PiState.ERROR  # noqa: SLF001
+    assert "stop_all" in hw.calls
+    assert ble.acks[-1].id == 5 and ble.acks[-1].ok is True
+
+
+def test_manual_sort_command(tmp_path) -> None:
+    orch, ble, hw, _clock = build(tmp_path, _motion_frames())
+    ble.simulate_command(Command(cmd=CommandType.SORT, id=9, arg="can"))
+    orch.tick()
+    assert "route:right" in hw.calls
+    assert ble.acks[-1].ok is True
+
+
+def test_heartbeat_emitted_when_idle(tmp_path) -> None:
+    orch, ble, _hw, clock = build(tmp_path, _motion_frames())
+    orch.tick()  # t=0, 하트비트 없음
+    before = len(ble.statuses)
+    clock.advance(2.1)  # heartbeat_period(2.0) 초과
+    orch.tick()
+    assert len(ble.statuses) == before + 1
