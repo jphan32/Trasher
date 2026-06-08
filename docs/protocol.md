@@ -221,11 +221,13 @@ class WasteCategory(str, Enum):
     PET = "pet"; CAN = "can"; OTHER = "other"
 ```
 
-### 4.4 분류 = Gemini 3.5 Flash (프록시) + 재활용 팁
-분류는 **Gemini 3.5 Flash**가 structured output(responseSchema)으로 수행한다. GCP 서비스 계정 키는
-배포되는 iPad에 두지 않고 **`/classifier` 프록시**가 보유·호출한다(iPad는 프록시 엔드포인트만 호출).
+### 4.4 분류 = Gemini 3.5 Flash (Pi `/classify/{cycle}`) + 재활용 팁
+분류는 **Gemini 3.5 Flash**가 structured output(responseSchema)으로 수행하며, **Pi의 HTTP 엔드포인트**에
+통합돼 있다: `POST /classify/{cycle}`. iPad는 이미지 대신 **cycle ID만** 보내고, Pi가 이미 보유한 로컬
+사진(`/photos/{cycle}.jpg`)을 읽어 Gemini를 호출한다(이미지 재업로드 없음 → 트래픽 최소화). 키(SA)는 Pi가
+보유한다. **호출자/결과 핸들러는 iPad**(UI 표시 + BLE 3분류 전달 주도), Pi는 Gemini 위임 실행자.
 
-프록시 응답: `{ "category": "pet|can|other", "description": "<재활용 팁(한국어)>", "confidence": 0.0~1.0 }`
+응답: `{ "category": "pet|can|other", "description": "<재활용 팁(한국어)>", "confidence": 0.0~1.0 }`
 - `category`는 Gemini가 enum으로 직접 3분류 출력 → iPad `CategoryNormalizer`는 매핑+임계값(기본 0.50)으로
   한 번 더 안전 정규화(불확실/미지 → `other`). **Pi는 항상 3분류만 받는다.**
 - `description`(재활용 팁)은 **BLE로 Pi에 보내지 않는다**(Pi는 3분류만 필요). iPad가 reward 화면에
@@ -234,13 +236,13 @@ class WasteCategory(str, Enum):
 ### 4.5 추상화 계층
 ```swift
 protocol ClassificationService {
-    func classify(imageData: Data) async throws -> RawClassification  // {label, confidence, description?}
+    func classify(cycle: Int, on device: DeviceInfo) async throws -> RawClassification  // {label, confidence, description?}
 }
-// MockClassificationService   : 개발/데모용(고정/회전 결과 + 캔드 팁)
-// RemoteClassificationService : /classifier(Gemini 프록시) 호출. 엔드포인트만 설정.
+// MockClassificationService : 개발/데모용(고정/회전 결과 + 캔드 팁)
+// PiClassificationService   : Pi POST /classify/{cycle} 호출(주소는 DeviceInfo에서 도출)
 ```
 앱의 나머지 코드는 mock/real을 구분하지 않는다. §4.4 정규화는 이 계층 내부에서 수행한다.
-팁(`description`)은 `SessionCoordinator.onTip` → iPad UI로 흐른다(Pi 미전달).
+팁(`description`)은 `SessionCoordinator.onTip` → iPad UI로 흐른다(Pi 미전달, BLE 계약 불변).
 
 ---
 
