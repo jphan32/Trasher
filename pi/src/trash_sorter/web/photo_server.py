@@ -56,15 +56,21 @@ def _make_handler(store: PhotoStore) -> type[BaseHTTPRequestHandler]:
                 self.send_error(404)
                 return
             path = store.path_for(int(m.group(1)))
-            if not path.is_file():
+            try:
+                data = path.read_bytes()
+            except OSError:
+                # 파일 없음 / prune과의 경쟁(TOCTOU) → 404
                 self.send_error(404)
                 return
-            data = path.read_bytes()
             self.send_response(200)
             self.send_header("Content-Type", "image/jpeg")
             self.send_header("Content-Length", str(len(data)))
             self.end_headers()
-            self.wfile.write(data)
+            try:
+                self.wfile.write(data)
+            except (BrokenPipeError, ConnectionResetError):
+                # iPad가 전송 도중 취소(타임아웃/백그라운드) — 조용히 종료, 트레이스백 없음
+                pass
 
         def log_message(self, *args: object) -> None:  # 조용히
             pass

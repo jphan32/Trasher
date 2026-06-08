@@ -17,7 +17,8 @@ def _f(name: str, default: float) -> float:
 
 
 def _i(name: str, default: int) -> int:
-    return int(os.environ.get(name, default))
+    # float-형 문자열("8080.0")도 허용 — int("8080.0")은 ValueError라 startup이 죽는다.
+    return int(float(os.environ.get(name, default)))
 
 
 def _s(name: str, default: str) -> str:

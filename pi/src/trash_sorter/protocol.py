@@ -72,6 +72,11 @@ def _drop_none(d: dict[str, Any]) -> dict[str, Any]:
     return {k: v for k, v in d.items() if v is not None}
 
 
+def _dump(d: dict[str, Any]) -> str:
+    """공통 직렬화: null 생략 + 컴팩트 JSON. 모든 메시지의 to_json이 이걸 쓴다."""
+    return json.dumps(_drop_none(d), separators=(",", ":"))
+
+
 # --- §3 특성 페이로드 모델 ------------------------------------------------------
 @dataclass(frozen=True)
 class DeviceInfo:
@@ -84,15 +89,14 @@ class DeviceInfo:
     proto: int = PROTO_VERSION
 
     def to_json(self) -> str:
-        return json.dumps(
+        return _dump(
             {
                 "fw": self.fw,
                 "proto": self.proto,
                 "ip": self.ip,
                 "port": self.port,
                 "name": self.name,
-            },
-            separators=(",", ":"),
+            }
         )
 
     @staticmethod
@@ -113,16 +117,13 @@ class Status:
     last_sort: WasteCategory | None = None
 
     def to_json(self) -> str:
-        return json.dumps(
-            _drop_none({
-                "state": self.state.value,
-                "cycle": self.cycle,
-                "seq": self.seq,
-                "err": self.err.value if self.err else None,
-                "lastSort": self.last_sort.value if self.last_sort else None,
-            }),
-            separators=(",", ":"),
-        )
+        return _dump({
+            "state": self.state.value,
+            "cycle": self.cycle,
+            "seq": self.seq,
+            "err": self.err.value if self.err else None,
+            "lastSort": self.last_sort.value if self.last_sort else None,
+        })
 
     @staticmethod
     def from_json(s: str | bytes) -> Status:
@@ -147,11 +148,8 @@ class PhotoReady:
     ts: int | None = None
 
     def to_json(self) -> str:
-        return json.dumps(
-            _drop_none(
-                {"cycle": self.cycle, "path": self.path, "w": self.w, "h": self.h, "ts": self.ts}
-            ),
-            separators=(",", ":"),
+        return _dump(
+            {"cycle": self.cycle, "path": self.path, "w": self.w, "h": self.h, "ts": self.ts}
         )
 
     @staticmethod
@@ -171,15 +169,12 @@ class ClassificationResult:
     raw: str | None = None
 
     def to_json(self) -> str:
-        return json.dumps(
-            _drop_none({
-                "cycle": self.cycle,
-                "category": self.category.value,
-                "confidence": self.confidence,
-                "raw": self.raw,
-            }),
-            separators=(",", ":"),
-        )
+        return _dump({
+            "cycle": self.cycle,
+            "category": self.category.value,
+            "confidence": self.confidence,
+            "raw": self.raw,
+        })
 
     @staticmethod
     def from_json(s: str | bytes) -> ClassificationResult:
@@ -201,10 +196,7 @@ class Command:
     arg: str | None = None
 
     def to_json(self) -> str:
-        return json.dumps(
-            _drop_none({"cmd": self.cmd.value, "arg": self.arg, "id": self.id}),
-            separators=(",", ":"),
-        )
+        return _dump({"cmd": self.cmd.value, "arg": self.arg, "id": self.id})
 
     @staticmethod
     def from_json(s: str | bytes) -> Command:
@@ -221,10 +213,7 @@ class CommandAck:
     err: ErrorCode | None = None
 
     def to_json(self) -> str:
-        return json.dumps(
-            _drop_none({"id": self.id, "ok": self.ok, "err": self.err.value if self.err else None}),
-            separators=(",", ":"),
-        )
+        return _dump({"id": self.id, "ok": self.ok, "err": self.err.value if self.err else None})
 
     @staticmethod
     def from_json(s: str | bytes) -> CommandAck:

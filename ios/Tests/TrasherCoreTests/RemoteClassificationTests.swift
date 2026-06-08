@@ -1,29 +1,9 @@
-// RemoteClassificationService 골격 테스트 — URLProtocol 스텁.
+// RemoteClassificationService 골격 테스트 — URLProtocol 스텁(StubURLProtocol 공유).
 import XCTest
 @testable import TrasherCore
 
-private final class RemoteStubProtocol: URLProtocol {
-    nonisolated(unsafe) static var handler: ((URLRequest) -> (HTTPURLResponse, Data))?
-    override class func canInit(with request: URLRequest) -> Bool { true }
-    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
-    override func startLoading() {
-        guard let handler = Self.handler else {
-            client?.urlProtocol(self, didFailWithError: URLError(.unknown)); return
-        }
-        let (response, data) = handler(request)
-        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-        client?.urlProtocol(self, didLoad: data)
-        client?.urlProtocolDidFinishLoading(self)
-    }
-    override func stopLoading() {}
-}
-
 final class RemoteClassificationTests: XCTestCase {
-    private func stubSession() -> URLSession {
-        let config = URLSessionConfiguration.ephemeral
-        config.protocolClasses = [RemoteStubProtocol.self]
-        return URLSession(configuration: config)
-    }
+    private func stubSession() -> URLSession { makeStubSession() }
 
     private var config: RemoteClassificationConfig {
         RemoteClassificationConfig(endpoint: URL(string: "https://api.example.com/classify")!)
@@ -40,7 +20,7 @@ final class RemoteClassificationTests: XCTestCase {
     }
 
     func testClassifyParsesLabelAndConfidence() async throws {
-        RemoteStubProtocol.handler = { req in
+        StubURLProtocol.handler = { req in
             XCTAssertEqual(req.httpMethod, "POST")
             let json = #"{"label":"aluminum_can","confidence":0.81}"#.data(using: .utf8)!
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, json)
@@ -54,8 +34,19 @@ final class RemoteClassificationTests: XCTestCase {
         XCTAssertEqual(CategoryNormalizer().normalize(raw, cycle: 1).category, .can)
     }
 
+    func testConfidenceAsStringIsAccepted() async throws {
+        StubURLProtocol.handler = { req in
+            let json = #"{"label":"pet","confidence":"0.93"}"#.data(using: .utf8)!
+            return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, json)
+        }
+        let svc = RemoteClassificationService(config: config, session: stubSession())
+        let raw = try await svc.classify(imageData: Data([0xFF, 0xD8]))
+        XCTAssertEqual(raw.label, "pet")
+        XCTAssertEqual(raw.confidence, 0.93, accuracy: 1e-9)  // 문자열 confidence 허용
+    }
+
     func testNon200Throws() async {
-        RemoteStubProtocol.handler = { req in
+        StubURLProtocol.handler = { req in
             (HTTPURLResponse(url: req.url!, statusCode: 503, httpVersion: nil, headerFields: nil)!, Data())
         }
         let svc = RemoteClassificationService(config: config, session: stubSession())
@@ -68,7 +59,7 @@ final class RemoteClassificationTests: XCTestCase {
     }
 
     func testMalformedResponseThrows() async {
-        RemoteStubProtocol.handler = { req in
+        StubURLProtocol.handler = { req in
             let json = #"{"unexpected":true}"#.data(using: .utf8)!
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, json)
         }

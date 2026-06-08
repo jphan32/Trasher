@@ -95,5 +95,5 @@ final class AppModel: ObservableObject {
         central?.start()
     }
 
-    let seeds: [Seed] = SeedReward().seeds
+    var seeds: [Seed] { seedReward.seeds }  // drawSeed와 동일 인스턴스 사용(분기 방지)
 }

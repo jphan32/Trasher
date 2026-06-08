@@ -34,3 +34,10 @@ def test_device_info_uses_advertised_ip(monkeypatch) -> None:
     assert di.ip == "10.1.2.3"
     assert di.port == 9000
     assert di.proto == 1
+
+
+def test_int_env_accepts_float_form(monkeypatch) -> None:
+    # int("8080.0")는 ValueError라 startup이 죽는다 → _i는 float-형도 허용해야 함.
+    monkeypatch.setenv("TRASH_HTTP_PORT", "8080.0")
+    from trash_sorter.config import Settings
+    assert Settings().network.http_port == 8080

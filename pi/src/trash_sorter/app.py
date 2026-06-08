@@ -66,7 +66,8 @@ class Orchestrator:
 
         self._detect_since: float | None = None
         self._awaiting_since: float | None = None
-        self._sort_since: float | None = None  # 논블로킹 sorting 타이밍
+        self._sort_since: float | None = None  # 논블로킹 사이클 sorting 타이밍
+        self._manual_sort_since: float | None = None  # 논블로킹 수동(진단) sort 타이밍
         self._last_heartbeat = 0.0
         self._running = False
 
@@ -85,8 +86,28 @@ class Orchestrator:
         self._drain_disconnects()
         self._drain_commands()
         self._drain_results()
+        self._advance_manual_sort()
         self._advance_state()
         self._maybe_heartbeat()
+
+    def _advance_manual_sort(self) -> None:
+        """논블로킹 수동 SORT: T_belt 경과 시 finish. 루프를 막지 않아 estop이 매 tick 처리됨."""
+        if self._manual_sort_since is None:
+            return
+        if self._clock() - self._manual_sort_since >= self._s.belt.run_seconds:
+            self._sorter.finish_sort()
+            self._manual_sort_since = None
+
+    def _abort_active_sort(self) -> None:
+        """진행 중 sort(사이클/수동)를 안전 정지. RESET/MAINTENANCE/disconnect의 비상 외 중단 경로.
+
+        벨트가 켜진 상태로 SORTING을 벗어나면 finish_sort가 호출되지 않아 벨트가 멈추지 않으므로,
+        하드웨어를 즉시 정지(stop_all)하고 타이머를 정리한다.
+        """
+        if self._sort_since is not None or self._manual_sort_since is not None:
+            self._hw.stop_all()
+        self._sort_since = None
+        self._manual_sort_since = None
 
     def _drain_disconnects(self) -> None:
         had = False
@@ -103,6 +124,7 @@ class Orchestrator:
         """§6 BLE 끊김: 진행 중 사이클을 안전 정리. iPad 재연결 시 start로 재개."""
         self._hw.stop_all()
         self._sort_since = None
+        self._manual_sort_since = None
         self._sm.reset()
         self._sm.stop()  # iPad가 다시 start 보낼 때까지 감지 중단
         self._reset_timers()
@@ -135,18 +157,28 @@ class Orchestrator:
                 case CommandType.STOP:
                     self._sm.stop()
                 case CommandType.RESET:
-                    self._sort_since = None
+                    self._abort_active_sort()  # 진행 중 벨트 정지
                     self._sm.reset()
                 case CommandType.ESTOP:
                     self._sort_since = None
+                    self._manual_sort_since = None
                     self._hw.stop_all()
                     self._sm.estop()
                 case CommandType.MAINTENANCE:
                     ok = self._require_arg(cmd.arg, ("true", "false", "1", "0", "on", "off"))
                     if ok:
+                        if _truthy(cmd.arg):
+                            self._abort_active_sort()  # 점검 진입 전 벨트 정지
                         self._sm.set_maintenance(_truthy(cmd.arg))
                 case CommandType.SORT:
-                    self._sorter.sort(WasteCategory(cmd.arg or ""))
+                    # 비-블로킹 진단 sort: begin 후 tick에서 T_belt 경과 시 finish.
+                    # IDLE에서만, 중복 금지. 잘못된 arg는 WasteCategory()가 ValueError→ok=False.
+                    cat = WasteCategory(cmd.arg or "")
+                    if self._sm.state is PiState.IDLE and self._manual_sort_since is None:
+                        self._sorter.begin_sort(cat)
+                        self._manual_sort_since = self._clock()
+                    else:
+                        ok = False
                 case CommandType.BELT:
                     ok = self._require_arg(cmd.arg, ("fwd", "stop"))
                     if ok:
@@ -177,8 +209,8 @@ class Orchestrator:
             self._run_sort()
 
     def _maybe_begin_detection(self) -> None:
-        if not self._sm.started:
-            return
+        if not self._sm.started or self._manual_sort_since is not None:
+            return  # 수동 진단 sort 중에는 감지하지 않는다
         if self._motion.is_motion(self._cam.read_frame()):
             if self._sm.begin_detection():
                 self._detect_since = self._clock()

@@ -125,9 +125,15 @@ public final class SessionCoordinator {
             }
             state = .processing(.sorting)
         case .idle:
-            if prevPiState == .sorting, status.cycle == activeCycle {
-                // sort 완료 → Pi의 실제 lastSort를 진실로 표시(§2.2). 우리 분류와 달라도 Pi를 따른다.
-                state = .reward(status.lastSort ?? .other)
+            // §2.2 정합화: '내 cycle이 sort되어 idle로 돌아왔다'는 durable 사실로 reward 판정.
+            // (sorting notify가 드롭돼도 idle+cycle+lastSort 하트비트로 복구된다.)
+            if status.cycle == activeCycle, let sorted = status.lastSort {
+                if case .reward = state {
+                    // 이미 reward — 유지
+                } else {
+                    sendCommand(.stop)   // §2.1 게이팅 fallback(sorting-entry stop을 놓쳤어도 보장)
+                }
+                state = .reward(sorted)
             } else if case .reward = state {
                 break                    // 보상/씨앗 화면 유지(하트비트로 어트랙트 복귀 안 함)
             } else {
@@ -139,22 +145,26 @@ public final class SessionCoordinator {
     // MARK: PhotoReady 수신 → 사진 GET → 분류 → 정규화 → 결과 전송(§6 폴백)
     public func received(_ photo: PhotoReady) async {
         guard let device, !incompatible else { return }
-        activeCycle = photo.cycle
+        let myCycle = photo.cycle
+        activeCycle = myCycle
         let fetcher = self.fetcher
         let classifier = self.classifier
+        let start = clock()
         let result: ClassificationResult
         do {
-            let outcome = try await withTimeout(resultDeadline) { () -> (Data, RawClassification) in
-                let data = try await fetcher.fetch(photo, from: device)
-                let raw = try await classifier.classify(imageData: data)
-                return (data, raw)
-            }
-            onPhotoData?(outcome.0)
-            result = normalizer.normalize(outcome.1, cycle: photo.cycle)
+            // 사진 먼저 받아 표시(분류 실패/타임아웃과 무관하게 UI에 사진을 보여준다).
+            let data = try await withTimeout(resultDeadline) { try await fetcher.fetch(photo, from: device) }
+            onPhotoData?(data)
+            // 남은 예산으로 분류 — 총 deadline이 Pi 15초를 넘지 않게.
+            let remaining = max(0.1, resultDeadline - clock().timeIntervalSince(start))
+            let raw = try await withTimeout(remaining) { try await classifier.classify(imageData: data) }
+            result = normalizer.normalize(raw, cycle: myCycle)
         } catch {
             let reason = error is TimeoutError ? "timeout" : "error"
-            result = normalizer.fallback(cycle: photo.cycle, reason: reason)
+            result = normalizer.fallback(cycle: myCycle, reason: reason)
         }
+        // 재진입 가드: 처리 중 새 PhotoReady가 activeCycle을 덮었으면 이 결과는 폐기(stale).
+        guard activeCycle == myCycle else { return }
         link.writeResult(result)         // cycle echo로 Pi가 상관
     }
 
@@ -172,6 +182,7 @@ public final class SessionCoordinator {
     // MARK: 하트비트 정지 감지 — UI 타이머가 주기 호출
     public func checkHeartbeat() {
         guard device != nil, !incompatible, let at = lastSeqAt else { return }
+        if case .reward = state { return }   // 보상/씨앗 인터랙션 중에는 stall로 덮지 않음
         if clock().timeIntervalSince(at) > stallThreshold {
             state = .stalled
         }

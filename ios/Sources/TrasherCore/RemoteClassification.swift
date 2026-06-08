@@ -54,11 +54,18 @@ public struct RemoteClassificationService: ClassificationService {
         guard
             let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any],
             let label = obj[config.labelKey] as? String,
-            let confidence = (obj[config.confidenceKey] as? NSNumber)?.doubleValue
+            let confidence = Self.asDouble(obj[config.confidenceKey])
         else {
             throw RemoteClassificationError.malformedResponse
         }
         return RawClassification(label: label, confidence: confidence)
+    }
+
+    /// confidence를 숫자 또는 숫자형 문자열("0.93") 양쪽에서 허용.
+    static func asDouble(_ value: Any?) -> Double? {
+        if let n = value as? NSNumber { return n.doubleValue }
+        if let s = value as? String { return Double(s) }
+        return nil
     }
 
     static func multipartBody(imageData: Data, field: String, boundary: String) -> Data {

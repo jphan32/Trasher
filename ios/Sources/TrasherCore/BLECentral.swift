@@ -33,6 +33,7 @@ public final class BLECentral: NSObject, PeripheralLink {
     }
 
     private func scan() {
+        guard central.state == .poweredOn else { return }  // 라디오 off면 no-op(상태 콜백에서 재시도)
         central.scanForPeripherals(withServices: [CBUUID(string: Proto.serviceUUID)])
     }
 
@@ -98,9 +99,10 @@ extension BLECentral: CBCentralManagerDelegate {
 
     public func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral,
                                error: Error?) {
+        self.peripheral = nil  // dangling 참조 정리(didFailToConnect와 대칭)
         resetConnectionState()
         onMain { $0.disconnected() }
-        scan()  // 자동 재연결
+        scan()  // 자동 재연결(라디오 off면 scan이 no-op, 상태 콜백에서 재시도)
     }
 }
 

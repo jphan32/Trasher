@@ -33,12 +33,13 @@ class FakeClock:
         self.t += dt
 
 
-def build(tmp_path, frames, *, hardware=None, camera=None):
+def build(tmp_path, frames, *, hardware=None, camera=None, run_seconds=0.0):
     clock = FakeClock()
     ble = MockBleServer()
     hw = hardware if hardware is not None else MockHardware()
     # run_seconds=0 → 논블로킹 sorting이 begin 다음 tick에 즉시 finish (결정적 2-tick).
-    settings = Settings(belt=BeltConfig(run_seconds=0.0))
+    # >0 → 벨트가 켜진 'mid-sort' 상태를 검사할 수 있다.
+    settings = Settings(belt=BeltConfig(run_seconds=run_seconds))
     orch = Orchestrator(
         settings=settings,
         state=StateMachine(),
@@ -154,11 +155,72 @@ def test_estop_command(tmp_path) -> None:
 
 
 def test_manual_sort_command(tmp_path) -> None:
+    # run_seconds=0 → begin tick + finish tick. 카테고리 경로 + 완료 후 중립.
     orch, ble, hw, _clock = build(tmp_path, _motion_frames())
     ble.simulate_command(Command(cmd=CommandType.SORT, id=9, arg="can"))
-    orch.tick()
+    orch.tick()  # begin_sort
     assert "route:right" in hw.calls
     assert ble.acks[-1].ok is True
+    orch.tick()  # _advance_manual_sort → finish (0 경과)
+    assert hw.belt_on is False
+    assert hw.calls[-1] == "route:center"
+
+
+def _drive_to_sorting_belt_on(orch, ble, clock):
+    """투입→촬영→결과 → SORTING begin_sort까지(벨트 ON, mid-sort). run_seconds>0 전제."""
+    ble.simulate_command(Command(cmd=CommandType.START, id=1))
+    for _ in range(3):
+        orch.tick()
+    clock.advance(0.6)
+    orch.tick()  # AWAITING
+    ble.simulate_result(
+        ClassificationResult(cycle=orch._sm.cycle, category=WasteCategory.PET, confidence=0.9)  # noqa: SLF001
+    )
+    orch.tick()  # SORTING + begin_sort (belt on)
+
+
+def test_reset_mid_sort_stops_belt(tmp_path) -> None:
+    orch, ble, hw, clock = build(tmp_path, _motion_frames(), run_seconds=10.0)
+    _drive_to_sorting_belt_on(orch, ble, clock)
+    assert hw.belt_on is True  # mid-sort
+    ble.simulate_command(Command(cmd=CommandType.RESET, id=2))
+    orch.tick()
+    assert hw.belt_on is False  # RESET이 벨트를 멈춰야 함
+    assert "stop_all" in hw.calls
+    assert orch._sm.state is PiState.IDLE  # noqa: SLF001
+
+
+def test_maintenance_mid_sort_stops_belt(tmp_path) -> None:
+    orch, ble, hw, clock = build(tmp_path, _motion_frames(), run_seconds=10.0)
+    _drive_to_sorting_belt_on(orch, ble, clock)
+    assert hw.belt_on is True
+    ble.simulate_command(Command(cmd=CommandType.MAINTENANCE, id=3, arg="true"))
+    orch.tick()
+    assert hw.belt_on is False  # 점검 진입 전 벨트 정지
+    assert orch._sm.state is PiState.MAINTENANCE  # noqa: SLF001
+
+
+def test_manual_sort_is_nonblocking_and_estop_aborts(tmp_path) -> None:
+    orch, ble, hw, _clock = build(tmp_path, _motion_frames(), run_seconds=10.0)
+    ble.simulate_command(Command(cmd=CommandType.SORT, id=1, arg="pet"))
+    orch.tick()  # begin_sort, 블로킹 없이 즉시 반환
+    assert hw.belt_on is True
+    assert orch._sm.state is PiState.IDLE  # noqa: SLF001  진단 sort는 사이클 상태 비변경
+    ble.simulate_command(Command(cmd=CommandType.ESTOP, id=2))
+    orch.tick()  # estop이 매 tick 처리됨(블로킹 없음) → 즉시 정지
+    assert hw.belt_on is False
+    assert orch._sm.state is PiState.ERROR  # noqa: SLF001
+
+
+def test_manual_sort_blocks_detection(tmp_path) -> None:
+    orch, ble, hw, clock = build(tmp_path, _motion_frames(), run_seconds=10.0)
+    ble.simulate_command(Command(cmd=CommandType.START, id=1))
+    ble.simulate_command(Command(cmd=CommandType.SORT, id=2, arg="pet"))
+    orch.tick()  # 수동 sort begin
+    # 수동 sort 중에는 변이가 있어도 감지 시작 안 함
+    for _ in range(3):
+        orch.tick()
+    assert orch._sm.state is PiState.IDLE  # noqa: SLF001  (DETECTING으로 안 감)
 
 
 def test_heartbeat_emitted_when_idle(tmp_path) -> None:

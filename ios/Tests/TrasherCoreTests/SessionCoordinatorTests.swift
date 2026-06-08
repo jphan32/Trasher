@@ -25,6 +25,12 @@ private struct SlowFetcher: PhotoFetcher {
     }
 }
 
+private struct ThrowingClassifier: ClassificationService {
+    func classify(imageData: Data) async throws -> RawClassification {
+        throw PhotoFetchError.badURL
+    }
+}
+
 @MainActor
 final class SessionCoordinatorTests: XCTestCase {
     private let device = DeviceInfo(fw: "0.1.0", ip: "127.0.0.1", port: 8080)
@@ -192,5 +198,41 @@ final class SessionCoordinatorTests: XCTestCase {
         c.connected(device)
         c.sendOperatorCommand(.estop)
         XCTAssertEqual(link.lastCommand?.cmd, .estop)
+    }
+
+    func testPhotoShownEvenWhenClassifyFails() async {
+        let link = MockPeripheralLink()
+        let clock = FakeClock()
+        let c = SessionCoordinator(
+            link: link, fetcher: OKFetcher(data: Data([1, 2, 3])),
+            classifier: ThrowingClassifier(), clock: { clock.now }
+        )
+        var shown: Data?
+        c.onPhotoData = { shown = $0 }
+        c.connected(device)
+        await c.received(PhotoReady(cycle: 1, path: "/p/1.jpg"))
+        XCTAssertEqual(shown, Data([1, 2, 3]))            // 분류 실패해도 사진은 표시됨
+        XCTAssertEqual(link.lastResult?.category, .other)  // §6 폴백 결과는 여전히 전송
+    }
+
+    func testRewardWithoutObservingSortingEdge() async {
+        // sorting notify가 드롭된 경우: idle + cycle + lastSort 만으로 reward를 복구해야 함.
+        let (c, link, _) = make()
+        c.connected(device)
+        await c.received(PhotoReady(cycle: 1, path: "/p/1.jpg"))  // activeCycle=1
+        c.received(Status(state: .idle, cycle: 1, seq: 5, lastSort: .pet))  // sorting 건너뜀
+        XCTAssertEqual(c.state, .reward(.pet))
+        XCTAssertEqual(link.lastCommand?.cmd, .stop)  // reward 진입 게이팅 fallback
+    }
+
+    func testStallDoesNotClobberReward() async {
+        let (c, _, clock) = make()
+        c.connected(device)
+        await c.received(PhotoReady(cycle: 1, path: "/p/1.jpg"))
+        c.received(Status(state: .idle, cycle: 1, seq: 1, lastSort: .can))
+        XCTAssertEqual(c.state, .reward(.can))
+        clock.advance(10)
+        c.checkHeartbeat()  // 보상/씨앗 중에는 stall로 덮지 않음
+        XCTAssertEqual(c.state, .reward(.can))
     }
 }
