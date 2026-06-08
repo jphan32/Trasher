@@ -111,6 +111,16 @@ final class AppModel: ObservableObject {
     // MARK: 누적 집계 영속(UserDefaults)
     private func recordSort(_ category: WasteCategory) {
         stats.record(category)
+        persistStats()
+    }
+
+    /// 운영자: 누적 통계 리셋.
+    func resetStats() {
+        stats = SortStats()
+        persistStats()
+    }
+
+    private func persistStats() {
         if let data = try? JSONEncoder().encode(stats) {
             UserDefaults.standard.set(data, forKey: Self.statsKey)
         }
