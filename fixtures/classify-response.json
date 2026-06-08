@@ -1,0 +1,9 @@
+{
+  "proto": 1,
+  "note": "Pi POST /classify/{cycle} 응답 골든. Pi(classify.schema 직렬화) ↔ iOS(PiClassificationService 파싱)를 같은 파일로 검증해 드리프트를 막는다. docs/protocol.md §4.4. 값은 정규화 완료(소문자 category, confidence 0~1, 트림된 description).",
+  "cases": [
+    {"category": "pet", "description": "페트병은 라벨을 떼고 내용물을 비운 뒤 압착해 투명 페트 전용함에 배출하세요.", "confidence": 0.93},
+    {"category": "can", "description": "캔은 내용물을 비우고 헹군 뒤 납작하게 만들어 캔류로 배출하세요.", "confidence": 0.88},
+    {"category": "other", "description": "재활용이 어려운 일반 쓰레기는 종량제 봉투에 배출하세요.", "confidence": 0.5}
+  ]
+}
