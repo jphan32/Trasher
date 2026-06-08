@@ -26,6 +26,14 @@ def main() -> None:
             log.info("시뮬레이션 종료")
         return
 
+    if "--tune" in sys.argv:
+        from .vision.tuning import run_cli
+
+        idx = sys.argv.index("--tune")
+        directory = sys.argv[idx + 1] if idx + 1 < len(sys.argv) else "."
+        run_cli(directory)
+        return
+
     settings = load_settings()
     ctx = build_app(settings)
 
