@@ -46,7 +46,7 @@ final class AppModel: ObservableObject {
             coordinator = SessionCoordinator(
                 link: ble,
                 fetcher: URLSessionPhotoFetcher(),
-                classifier: MockClassificationService()  // 실제 API 확정 시 교체
+                classifier: Self.makeClassifier()  // URL 설정 시 Gemini 프록시, 아니면 Mock
             )
             central = ble
             demo = nil
@@ -112,6 +112,21 @@ final class AppModel: ObservableObject {
         if let data = try? JSONEncoder().encode(stats) {
             UserDefaults.standard.set(data, forKey: Self.statsKey)
         }
+    }
+
+    /// 분류기 선택: TRASHER_CLASSIFIER_URL(env) 또는 --classifier-url=<url>가 있으면
+    /// /classifier(Gemini 프록시)를 호출하는 RemoteClassificationService, 없으면 Mock.
+    private static func makeClassifier() -> ClassificationService {
+        let env = ProcessInfo.processInfo
+        var urlString = env.environment["TRASHER_CLASSIFIER_URL"]
+        if urlString == nil {
+            urlString = env.arguments.first { $0.hasPrefix("--classifier-url=") }?
+                .replacingOccurrences(of: "--classifier-url=", with: "")
+        }
+        if let s = urlString, let url = URL(string: s) {
+            return RemoteClassificationService(config: RemoteClassificationConfig(endpoint: url))
+        }
+        return MockClassificationService()
     }
 
     private static func loadStats() -> SortStats {

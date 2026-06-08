@@ -48,3 +48,16 @@ xcodebuild -project Trasher.xcodeproj -scheme Trasher \
 - BLE 자동 재연결: 연결 끊김·연결 실패 시 자동 재스캔(BLECentral).
 - **Guided Access**(설정 → 손쉬운 사용 → 가이드 접근)를 켜 앱 이탈을 막을 것(코드로 강제 불가).
 - 전원/네트워크는 부스 운영 체크리스트로 관리(라우터 인터넷, AP격리 OFF — docs/protocol.md).
+
+## 실 분류(Gemini 프록시) 연결
+
+기본은 `MockClassificationService`. 실 Gemini를 쓰려면 `/classifier` 프록시를 띄우고 그 URL을 준다:
+
+```bash
+# 시뮬레이터(스킴 env) 또는 실행 인자
+TRASHER_CLASSIFIER_URL=http://<classifier-host>:8090/classify  (env)
+# 또는 launch arg: --classifier-url=http://<host>:8090/classify
+```
+
+URL이 있으면 `RemoteClassificationService`가 프록시를 호출(3분류 + 재활용 팁), 없으면 Mock.
+재활용 팁은 reward 화면에 부가정보(💡)로 표시된다.
