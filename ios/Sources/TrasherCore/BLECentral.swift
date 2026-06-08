@@ -11,15 +11,15 @@ import Foundation
 @preconcurrency import CoreBluetooth
 
 public final class BLECentral: NSObject, PeripheralLink {
-    private let coordinator: SessionCoordinator
+    /// 늦은 바인딩(순환 의존 회피): coordinator는 link를 strong-hold, BLECentral은 weak-hold.
+    public weak var coordinator: SessionCoordinator?
     private var central: CBCentralManager!
     private var peripheral: CBPeripheral?
     private var chars: [String: CBCharacteristic] = [:]
 
     private static let notifyChars = [Proto.charStatus, Proto.charPhotoReady, Proto.charCommandAck]
 
-    public init(coordinator: SessionCoordinator) {
-        self.coordinator = coordinator
+    public override init() {
         super.init()
         central = CBCentralManager(delegate: self, queue: .main)
     }
@@ -49,7 +49,7 @@ public final class BLECentral: NSObject, PeripheralLink {
 
     // MARK: 코디네이터로 홉
     private func onMain(_ body: @escaping @MainActor (SessionCoordinator) -> Void) {
-        let c = coordinator
+        guard let c = coordinator else { return }
         Task { @MainActor in body(c) }
     }
 }
@@ -110,8 +110,7 @@ extension BLECentral: CBPeripheralDelegate {
         case CBUUID(string: Proto.charStatus):
             if let s = try? Wire.decode(Status.self, from: data) { onMain { $0.received(s) } }
         case CBUUID(string: Proto.charPhotoReady):
-            if let pr = try? Wire.decode(PhotoReady.self, from: data) {
-                let c = coordinator
+            if let pr = try? Wire.decode(PhotoReady.self, from: data), let c = coordinator {
                 Task { @MainActor in await c.received(pr) }
             }
         case CBUUID(string: Proto.charCommandAck):

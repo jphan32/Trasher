@@ -103,7 +103,16 @@ uv run trash-sorter   # 실행(실기기)
 
 ### iPad (`/ios`) — Swift/SwiftUI
 
-(스캐폴딩 시 추가)
+2계층: **`TrasherCore`**(SwiftPM 라이브러리, 순수 로직 — 호스트 `swift test`로 검증) + **Xcode 앱 타깃**(`ios/App`, SwiftUI/CoreBluetooth, XcodeGen 생성).
+
+```bash
+cd ios && swift test                 # 코어 검증(프로토콜/분류/정규화/coordinator/프레젠테이션, 36 테스트)
+cd ios/App && xcodegen generate      # project.yml → Trasher.xcodeproj (.xcodeproj는 gitignore)
+xcodebuild -project Trasher.xcodeproj -scheme Trasher -destination 'generic/platform=iOS Simulator' build
+```
+
+- 코어 로직(`SessionCoordinator` = 게이팅/정합화/폴백, 분류 정규화, 프레젠테이션)은 전부 mock으로 호스트 테스트. `BLECentral`(CoreBluetooth)·SwiftUI 렌더링은 실기기/시뮬레이터 검증.
+- 외부 분류 API 미정 → `MockClassificationService`. 확정 시 `RemoteClassificationService`만 교체.
 
 ## 개발 워크플로 메모
 

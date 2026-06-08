@@ -25,3 +25,19 @@ swift test      # 프로토콜 라운드트립 + 정규화 검증 (호스트)
 - 외부 분류 API 미정 → `ClassificationService` 뒤에서 개발. 실제 API 확정 시 `RemoteClassificationService`만 교체.
 - API 라벨 → 3분류("페트/캔/기타") 정규화 + confidence 임계값은 **iPad 책임**. Pi에는 항상 3분류만 전달.
 - 실 BLE 검증은 시뮬레이터가 아닌 **실기기(iPad)** 에서만 가능.
+
+## iOS 앱 (Xcode)
+
+앱 타깃은 [XcodeGen](https://github.com/yonaskolb/XcodeGen)으로 생성한다(`project.yml`이 진실, `.xcodeproj`는 gitignore).
+
+```bash
+cd ios/App
+xcodegen generate                 # project.yml → Trasher.xcodeproj
+# 시뮬레이터 빌드(검증)
+xcodebuild -project Trasher.xcodeproj -scheme Trasher \
+  -destination 'generic/platform=iOS Simulator' build
+# 또는 Xcode로 Trasher.xcodeproj 열어 실기기 실행(BLE는 실기기 필수)
+```
+
+화면: 어트랙트→진행→결과(+씨앗 추첨)→오류/정지/점검. 좌상단 3초 길게 눌러 운영자 정비 화면.
+디자인: 유기적 에디토리얼-식물 컨셉(크림 페이퍼/딥 포레스트/새싹·클레이), 카테고리 색 구분.

@@ -1,0 +1,28 @@
+name: Trasher
+options:
+  bundleIdPrefix: kr.recycle.trasher
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+
+packages:
+  TrasherCore:
+    path: ..
+
+targets:
+  Trasher:
+    type: application
+    platform: iOS
+    sources:
+      - Sources
+    dependencies:
+      - package: TrasherCore
+    settings:
+      base:
+        TARGETED_DEVICE_FAMILY: 2        # iPad
+        SWIFT_VERSION: "6.0"
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription: "분류기와 BLE로 통신합니다"
+        INFOPLIST_KEY_UIRequiresFullScreen: YES
+        INFOPLIST_KEY_UIStatusBarHidden: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations__ipad__: "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"

@@ -1,0 +1,56 @@
+// 코디네이터 ↔ SwiftUI 브리지. SessionCoordinator(@MainActor)의 상태를 @Published로 노출.
+import Foundation
+import SwiftUI
+import TrasherCore
+
+@MainActor
+final class AppModel: ObservableObject {
+    @Published private(set) var model: ScreenModel
+    @Published var drawnSeed: Seed?
+
+    private let coordinator: SessionCoordinator
+    private let central = BLECentral()
+    private let seedReward = SeedReward()
+    private var heartbeatTimer: Timer?
+
+    init() {
+        let central = self.central
+        coordinator = SessionCoordinator(
+            link: central,
+            fetcher: URLSessionPhotoFetcher(),
+            classifier: MockClassificationService()  // 실제 API 확정 시 교체
+        )
+        model = screenModel(for: .disconnected)
+        central.coordinator = coordinator
+        coordinator.onStateChange = { [weak self] state in
+            self?.apply(state)
+        }
+        central.start()
+        heartbeatTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.coordinator.checkHeartbeat() }
+        }
+    }
+
+    private func apply(_ state: SessionCoordinator.SessionState) {
+        model = screenModel(for: state)
+        if case .reward = state {} else { drawnSeed = nil }  // 보상 화면 떠날 때 초기화
+    }
+
+    // 씨앗 추첨(reward 화면에서 호출)
+    func drawSeed() {
+        drawnSeed = seedReward.draw()
+    }
+
+    // 씨앗 받기 완료 → 어트랙트 복귀 + 감지 재개(§2.1)
+    func finishSeed() {
+        drawnSeed = nil
+        coordinator.seedInteractionFinished()
+    }
+
+    // 운영자(정비) 명령
+    func operatorCommand(_ type: CommandType, arg: String? = nil) {
+        coordinator.sendOperatorCommand(type, arg: arg)
+    }
+
+    let seeds: [Seed] = SeedReward().seeds
+}
