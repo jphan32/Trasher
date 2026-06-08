@@ -110,7 +110,7 @@ uv run trash-sorter   # 실행(실기기)
 2계층: **`TrasherCore`**(SwiftPM 라이브러리, 순수 로직 — 호스트 `swift test`로 검증) + **Xcode 앱 타깃**(`ios/App`, SwiftUI/CoreBluetooth, XcodeGen 생성).
 
 ```bash
-cd ios && swift test                 # 코어 검증(프로토콜/분류/정규화/coordinator/프레젠테이션, 36 테스트)
+cd ios && swift test                 # 코어 검증(프로토콜/분류/coordinator/프레젠테이션/스테퍼, 59 테스트)
 cd ios/App && xcodegen generate      # project.yml → Trasher.xcodeproj (.xcodeproj는 gitignore)
 xcodebuild -project Trasher.xcodeproj -scheme Trasher -destination 'generic/platform=iOS Simulator' build
 ```

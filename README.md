@@ -32,10 +32,10 @@ iPad는 이미지 대신 cycle ID만 보내고(재업로드 없음) Pi가 로컬
 
 ```bash
 # Pi (uv)
-cd pi && uv sync && uv run pytest -q          # mock 기반, 하드웨어 불필요 (64 테스트)
+cd pi && uv sync && uv run pytest -q          # mock 기반, 하드웨어 불필요 (89 테스트)
 
 # iPad 코어
-cd ios && swift test                          # 프로토콜·coordinator·분류 (45 테스트)
+cd ios && swift test                          # 프로토콜·coordinator·분류·스테퍼 (59 테스트)
 
 # iPad 앱
 cd ios/App && xcodegen generate
@@ -49,7 +49,7 @@ xcrun simctl launch <udid> kr.recycle.trasher.Trasher --demo
 
 - **하드웨어/비전/BLE는 인터페이스 + Mock으로 추상화** → macOS/CI에서 전 로직 테스트, 실기기 검증만 분리.
 - **분류 카테고리 정규화는 iPad 책임** — 외부 API 라벨 → 3분류 + confidence 임계값. Pi엔 3분류만 전달.
-- **분류 API는 추상화 뒤** — 미정이라 `MockClassificationService`로 개발, 확정 시 `RemoteClassificationService`만 교체.
+- **분류 API는 추상화 뒤** — `ClassificationService` 프로토콜. 개발/데모는 `MockClassificationService`, 실서비스는 `PiClassificationService`(Pi `POST /classify/{cycle}` 호출 → Gemini).
 - **타임아웃·끊김 폴백** — 어떤 경우에도 Pi는 결과를 받는다(`기타` 안전 기본값).
 
 ## 현황

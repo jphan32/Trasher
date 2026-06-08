@@ -38,9 +38,10 @@ src/trash_sorter/
   hardware/        # 서보3/벨트1: 인터페이스 + Mock/gpiozero + sort 시퀀스
   vision/          # 카메라 + 변이검출: 인터페이스 + Mock/picamera2
   ble/             # BLE Peripheral: 인터페이스 + Mock/bless
-  web/             # 사진 HTTP 서버
+  classify/        # Gemini 분류(structured output) + Mock, prompts.toml
+  web/             # 사진 HTTP 서버 + POST /classify/{cycle}
   app.py           # 오케스트레이터 (전 구성요소 결선 + 사이클 루프)
-  sim.py           # 시뮬레이션 모드(--simulate)
+  sim.py           # 시뮬레이션 모드(--simulate), 비전 튜닝(--tune)
   factory.py       # 플랫폼 분기 조립
 ```
 
