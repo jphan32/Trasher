@@ -2,9 +2,9 @@ name: pi-ci
 
 on:
   push:
-    paths: ["pi/**", ".github/workflows/pi-ci.yml"]
+    paths: ["pi/**", "fixtures/**", ".github/workflows/pi-ci.yml"]
   pull_request:
-    paths: ["pi/**", ".github/workflows/pi-ci.yml"]
+    paths: ["pi/**", "fixtures/**", ".github/workflows/pi-ci.yml"]
 
 jobs:
   test:

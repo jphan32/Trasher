@@ -1,0 +1,31 @@
+name: ios-ci
+
+on:
+  push:
+    paths: ["ios/**", "fixtures/**", ".github/workflows/ios-ci.yml"]
+  pull_request:
+    paths: ["ios/**", "fixtures/**", ".github/workflows/ios-ci.yml"]
+
+jobs:
+  test:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: TrasherCore 테스트(호스트)
+        working-directory: ios
+        run: swift test
+
+      - name: XcodeGen 설치
+        run: brew install xcodegen
+
+      - name: Xcode 프로젝트 생성
+        working-directory: ios/App
+        run: xcodegen generate
+
+      - name: iOS 시뮬레이터 빌드
+        working-directory: ios/App
+        run: |
+          xcodebuild -project Trasher.xcodeproj -scheme Trasher \
+            -destination 'generic/platform=iOS Simulator' \
+            build CODE_SIGNING_ALLOWED=NO
