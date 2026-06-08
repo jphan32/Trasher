@@ -1,8 +1,12 @@
-"""엔트리포인트. HTTP·BLE 시작 → DeviceInfo 광고 → 사이클 루프."""
+"""엔트리포인트. HTTP·BLE 시작 → DeviceInfo 광고 → 사이클 루프.
+
+`--simulate`: 하드웨어 없이 모의 사이클 구동(로깅/QA). 자세히는 sim.py.
+"""
 
 from __future__ import annotations
 
 import logging
+import sys
 
 from .config import load_settings
 from .factory import build_app, device_info
@@ -11,6 +15,16 @@ from .factory import build_app, device_info
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     log = logging.getLogger("trash_sorter")
+
+    if "--simulate" in sys.argv:
+        from .sim import Simulation
+
+        log.info("시뮬레이션 모드 — 하드웨어 없이 사이클 구동 (Ctrl+C로 종료)")
+        try:
+            Simulation().run()
+        except KeyboardInterrupt:
+            log.info("시뮬레이션 종료")
+        return
 
     settings = load_settings()
     ctx = build_app(settings)
