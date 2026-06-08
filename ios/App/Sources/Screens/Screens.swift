@@ -36,6 +36,7 @@ struct AttractView: View {
 // MARK: 진행(인식→분류→이동)
 struct ProcessingView: View {
     let model: ScreenModel
+    @EnvironmentObject var app: AppModel
     @State private var spin = false
 
     var body: some View {
@@ -48,7 +49,13 @@ struct ProcessingView: View {
                     .frame(width: 220, height: 220)
                     .rotationEffect(.degrees(spin ? 360 : 0))
                     .animation(.linear(duration: 1).repeatForever(autoreverses: false), value: spin)
-                Image(systemName: "leaf.fill").font(.system(size: 72)).foregroundStyle(Theme.sprout)
+                // 투입된 쓰레기 사진(있으면 원형 마스크로 표시), 없으면 새싹 아이콘
+                if let photo = app.photo {
+                    Image(uiImage: photo).resizable().scaledToFill()
+                        .frame(width: 180, height: 180).clipShape(Circle())
+                } else {
+                    Image(systemName: "leaf.fill").font(.system(size: 72)).foregroundStyle(Theme.sprout)
+                }
             }
             Text(model.title).font(Theme.title(56)).foregroundStyle(Theme.ink)
                 .multilineTextAlignment(.center)

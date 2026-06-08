@@ -11,6 +11,12 @@ struct RewardView: View {
 
     var body: some View {
         VStack(spacing: 36) {
+            // 투입된 쓰레기 사진(있으면)
+            if let photo = app.photo {
+                Image(uiImage: photo).resizable().scaledToFill()
+                    .frame(width: 160, height: 160).clipShape(RoundedRectangle(cornerRadius: 24))
+                    .overlay(RoundedRectangle(cornerRadius: 24).stroke(Theme.paperDeep, lineWidth: 3))
+            }
             // 카테고리 배지
             VStack(spacing: 12) {
                 Text(category.displayName)
