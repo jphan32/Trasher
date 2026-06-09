@@ -5,15 +5,26 @@
 
 import Foundation
 
-/// 외부 API의 원시 출력(라벨 + confidence + 재활용 팁). 정규화 전.
+/// 외부 API의 원시 출력(라벨 + confidence + 재활용 팁 + 에코포인트). 정규화 전.
+/// description·ecoPoints·recyclable은 iPad 전용 표시·보상 정보다(BLE 미전달). docs §4.4/§4.6.
 public struct RawClassification: Equatable, Sendable {
     public let label: String
     public let confidence: Double
     public let description: String?   // 재활용 팁(Gemini가 제공, iPad 부가정보 표시용)
-    public init(label: String, confidence: Double, description: String? = nil) {
+    public let ecoPoints: Int?        // 탄소절감 에코포인트 0~100(Gemini 산출, 보상 산출용)
+    public let recyclable: Bool?      // 재활용 가능 여부(other라도 true면 보상 대상)
+    public init(
+        label: String,
+        confidence: Double,
+        description: String? = nil,
+        ecoPoints: Int? = nil,
+        recyclable: Bool? = nil
+    ) {
         self.label = label
         self.confidence = confidence
         self.description = description
+        self.ecoPoints = ecoPoints
+        self.recyclable = recyclable
     }
 }
 
@@ -23,15 +34,20 @@ public protocol ClassificationService: Sendable {
     func classify(cycle: Int, on device: DeviceInfo) async throws -> RawClassification
 }
 
-/// 개발/데모용 Mock. 고정 결과 + 캔드 팁을 반환한다.
+/// 개발/데모용 Mock. 고정 결과 + 캔드 팁 + 에코포인트를 반환한다.
 public struct MockClassificationService: ClassificationService {
     public let fixed: RawClassification
     public init(
         label: String = "pet",
         confidence: Double = 0.95,
-        description: String? = "페트병은 라벨을 떼고 내용물을 비운 뒤 압착해 배출해요."
+        description: String? = "페트병은 라벨을 떼고 내용물을 비운 뒤 압착해 배출해요.",
+        ecoPoints: Int? = 60,
+        recyclable: Bool? = true
     ) {
-        self.fixed = RawClassification(label: label, confidence: confidence, description: description)
+        self.fixed = RawClassification(
+            label: label, confidence: confidence, description: description,
+            ecoPoints: ecoPoints, recyclable: recyclable
+        )
     }
     public func classify(cycle: Int, on device: DeviceInfo) async throws -> RawClassification {
         fixed

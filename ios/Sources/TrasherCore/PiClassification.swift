@@ -39,13 +39,32 @@ public struct PiClassificationService: ClassificationService {
             throw PiClassificationError.malformedResponse
         }
         let description = obj["description"] as? String   // 재활용 팁(없을 수 있음)
-        return RawClassification(label: category, confidence: confidence, description: description)
+        let ecoPoints = Self.asInt(obj["eco_points"])     // 탄소절감 에코포인트(없을 수 있음)
+        let recyclable = Self.asBool(obj["recyclable"])   // 재활용 가능 여부(없을 수 있음)
+        return RawClassification(
+            label: category, confidence: confidence, description: description,
+            ecoPoints: ecoPoints, recyclable: recyclable
+        )
     }
 
     /// confidence를 숫자 또는 숫자형 문자열("0.93") 양쪽에서 허용.
     static func asDouble(_ value: Any?) -> Double? {
         if let n = value as? NSNumber { return n.doubleValue }
         if let s = value as? String { return Double(s) }
+        return nil
+    }
+
+    /// eco_points를 숫자 또는 숫자형 문자열에서 허용(없으면 nil).
+    static func asInt(_ value: Any?) -> Int? {
+        if let n = value as? NSNumber { return n.intValue }
+        if let s = value as? String { return Int(s) }
+        return nil
+    }
+
+    /// recyclable을 Bool 또는 0/1 숫자에서 허용(없으면 nil).
+    static func asBool(_ value: Any?) -> Bool? {
+        if let b = value as? Bool { return b }
+        if let n = value as? NSNumber { return n.boolValue }
         return nil
     }
 }

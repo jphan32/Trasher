@@ -33,6 +33,13 @@ final class PiClassificationContractTests: XCTestCase {
             XCTAssertEqual(raw.label, c["category"] as? String)
             XCTAssertEqual(raw.description, c["description"] as? String)
             XCTAssertEqual(raw.confidence, (c["confidence"] as! NSNumber).doubleValue, accuracy: 1e-9)
+            // eco 필드도 골든과 일치하게 파싱(탄소절감 에코포인트·재활용 여부)
+            XCTAssertEqual(raw.ecoPoints, (c["eco_points"] as! NSNumber).intValue)
+            XCTAssertEqual(raw.recyclable, c["recyclable"] as? Bool)
+            // 비재활용 케이스는 보상이 0개, 재활용 양수는 1개 이상
+            let eco = EcoReward(raw: raw)
+            if raw.recyclable == false { XCTAssertEqual(eco.lollipops, 0) }
+            else if (raw.ecoPoints ?? 0) > 0 { XCTAssertGreaterThanOrEqual(eco.lollipops, 1) }
             // 정규화 시 3분류로 매핑됨(골든은 이미 pet/can/other)
             XCTAssertTrue(WasteCategory.allCases.map(\.rawValue).contains(raw.label))
         }

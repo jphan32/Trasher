@@ -18,7 +18,7 @@ public enum Screen: String, Equatable, Sendable {
     case connecting   // 미연결/연결중
     case attract      // 투입 대기(어트랙트)
     case processing   // 감지~분류~이동 진행
-    case reward       // 결과 + 씨앗
+    case reward       // 결과 + 에코포인트/막대사탕 보상
     case error        // Pi 오류
     case maintenance  // 점검 모드
     case stalled      // 응답 없음
@@ -54,7 +54,7 @@ public func screenModel(for state: SessionCoordinator.SessionState) -> ScreenMod
                            subtitle: "잠시만 기다려주세요")
     case .reward(let category):
         return ScreenModel(screen: .reward, title: "\(category.displayName)으로 분류했어요",
-                           subtitle: "씨앗을 골라 가세요", category: category)
+                           subtitle: "탄소를 줄였어요! 보상을 받아 가세요", category: category)
     case .error(let code):
         return ScreenModel(screen: .error, title: "잠시 문제가 생겼어요",
                            subtitle: "관리자를 호출해주세요 (\(code.rawValue))")

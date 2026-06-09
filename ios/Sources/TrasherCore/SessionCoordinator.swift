@@ -35,7 +35,7 @@ public final class SessionCoordinator {
         case incompatible(proto: Int)
         case attract                       // Pi idle·started, 투입 대기
         case processing(PiState)           // 감지/촬영/대기/sort 진행 시각화
-        case reward(WasteCategory)         // sort 완료 → 결과 + 씨앗 추첨
+        case reward(WasteCategory)         // sort 완료 → 결과 + 에코포인트/막대사탕 보상(§4.6)
         case error(ErrorCode)
         case maintenance
         case stalled                       // 하트비트 정지(Pi 응답 없음)
@@ -48,6 +48,7 @@ public final class SessionCoordinator {
     public var onPhotoData: ((Data) -> Void)?      // UI 사진 표시용
     public var onCycleComplete: ((WasteCategory) -> Void)?  // 집계: 사이클 완료 1회
     public var onTip: ((String?) -> Void)?         // 재활용 팁(분류 완료 시, 부가정보 표시용)
+    public var onEcoReward: ((EcoReward) -> Void)? // 에코포인트→막대사탕 보상(§4.6, 분류 완료 시)
 
     private let link: PeripheralLink
     private let fetcher: PhotoFetcher
@@ -163,12 +164,14 @@ public final class SessionCoordinator {
         // ② 분류(cycle 기반) — Pi가 로컬 사진을 읽으므로 표시 fetch와 무관하게 수행.
         let result: ClassificationResult
         var tip: String?
+        var eco: EcoReward = .none       // 폴백 기본값 — 보상 없음(§6)
         do {
             let remaining = max(0.1, resultDeadline - clock().timeIntervalSince(start))
             let raw = try await withTimeout(remaining) {
                 try await classifier.classify(cycle: myCycle, on: device)
             }
             tip = raw.description           // 재활용 팁(부가정보)
+            eco = EcoReward(raw: raw)       // 에코포인트→막대사탕 보상(§4.6)
             result = normalizer.normalize(raw, cycle: myCycle)
         } catch {
             let reason = error is TimeoutError ? "timeout" : "error"
@@ -177,6 +180,7 @@ public final class SessionCoordinator {
         // 재진입 가드: 처리 중 새 PhotoReady가 activeCycle을 덮었으면 이 결과는 폐기(stale).
         guard activeCycle == myCycle else { return }
         onTip?(tip)                      // 팁 표시(실패 시 nil)
+        onEcoReward?(eco)                // 보상(에코포인트/사탕) 전달 — Pi 미전달, BLE 불변
         link.writeResult(result)         // cycle echo로 Pi가 상관
     }
 

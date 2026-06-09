@@ -280,6 +280,40 @@ final class SessionCoordinatorTests: XCTestCase {
         XCTAssertEqual(tips, [String?.none])  // 분류 실패 → 팁 없음
     }
 
+    func testEcoRewardDeliveredOnClassification() async {
+        // 분류 성공 시 onEcoReward로 에코포인트/막대사탕 보상 전달(§4.6). Mock 기본 60점·재활용 → 사탕 2개.
+        let link = MockPeripheralLink()
+        let clock = FakeClock()
+        let c = SessionCoordinator(
+            link: link, fetcher: OKFetcher(data: Data([1])),
+            classifier: MockClassificationService(label: "pet", confidence: 0.95),
+            clock: { clock.now }
+        )
+        var rewards: [EcoReward] = []
+        c.onEcoReward = { rewards.append($0) }
+        c.connected(device)
+        await c.received(PhotoReady(cycle: 1, path: "/p/1.jpg"))
+        XCTAssertEqual(rewards.count, 1)
+        XCTAssertEqual(rewards.first?.ecoPoints, 60)
+        XCTAssertEqual(rewards.first?.lollipops, 2)
+    }
+
+    func testEcoRewardNoneOnFailure() async {
+        // 분류 실패 → 보상 없음(.none, 사탕 0개). §6 폴백.
+        let link = MockPeripheralLink()
+        let clock = FakeClock()
+        let c = SessionCoordinator(
+            link: link, fetcher: OKFetcher(data: Data([1])),
+            classifier: ThrowingClassifier(), clock: { clock.now }
+        )
+        var rewards: [EcoReward] = []
+        c.onEcoReward = { rewards.append($0) }
+        c.connected(device)
+        await c.received(PhotoReady(cycle: 1, path: "/p/1.jpg"))
+        XCTAssertEqual(rewards, [EcoReward.none])
+        XCTAssertEqual(rewards.first?.lollipops, 0)
+    }
+
     func testStallDoesNotClobberReward() async {
         let (c, _, clock) = make()
         c.connected(device)

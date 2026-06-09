@@ -9,7 +9,7 @@ final class PiClassificationTests: XCTestCase {
         StubURLProtocol.handler = { req in
             XCTAssertEqual(req.url?.absoluteString, "http://127.0.0.1:8080/classify/42")
             XCTAssertEqual(req.httpMethod, "POST")
-            let json = #"{"category":"can","description":"캔은 헹궈서 배출.","confidence":0.9}"#
+            let json = #"{"category":"can","description":"캔은 헹궈서 배출.","confidence":0.9,"eco_points":55,"recyclable":true}"#
                 .data(using: .utf8)!
             return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, json)
         }
@@ -18,6 +18,19 @@ final class PiClassificationTests: XCTestCase {
         XCTAssertEqual(raw.label, "can")
         XCTAssertEqual(raw.confidence, 0.9, accuracy: 1e-9)
         XCTAssertEqual(raw.description, "캔은 헹궈서 배출.")  // 재활용 팁
+        XCTAssertEqual(raw.ecoPoints, 55)                  // 탄소절감 에코포인트
+        XCTAssertEqual(raw.recyclable, true)               // 재활용 가능
+    }
+
+    func testEcoFieldsOptionalWhenAbsent() async throws {
+        // eco 필드 없는 응답도 파싱 성공(없으면 nil) — 분류/팁은 정상.
+        StubURLProtocol.handler = { req in
+            let json = #"{"category":"pet","confidence":0.9}"#.data(using: .utf8)!
+            return (HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, json)
+        }
+        let raw = try await PiClassificationService(session: makeStubSession()).classify(cycle: 1, on: device)
+        XCTAssertNil(raw.ecoPoints)
+        XCTAssertNil(raw.recyclable)
     }
 
     func testConfidenceAsStringAccepted() async throws {
