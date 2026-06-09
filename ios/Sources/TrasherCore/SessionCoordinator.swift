@@ -188,8 +188,8 @@ public final class SessionCoordinator {
         // 스캐폴드: 명령 ack 로깅/디버그 지점.
     }
 
-    // MARK: 씨앗 인터랙션 종료 → 어트랙트 복귀 + 감지 재개(§2.1)
-    public func seedInteractionFinished() {
+    // MARK: 보상 인터랙션 종료 → 어트랙트 복귀 + 감지 재개(§2.1)
+    public func rewardFinished() {
         activeCycle = nil
         sendCommand(.start)
         state = .attract
@@ -198,7 +198,7 @@ public final class SessionCoordinator {
     // MARK: 하트비트 정지 감지 — UI 타이머가 주기 호출
     public func checkHeartbeat() {
         guard device != nil, !incompatible, let at = lastSeqAt else { return }
-        if case .reward = state { return }   // 보상/씨앗 인터랙션 중에는 stall로 덮지 않음
+        if case .reward = state { return }   // 보상 인터랙션 중에는 stall로 덮지 않음
         if clock().timeIntervalSince(at) > stallThreshold {
             state = .stalled
         }

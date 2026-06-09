@@ -85,7 +85,7 @@ final class SessionCoordinatorTests: XCTestCase {
         XCTAssertEqual(c.state, .reward(.pet))
         XCTAssertEqual(link.lastCommand?.cmd, .stop)  // §2.1 게이팅
 
-        c.seedInteractionFinished()
+        c.rewardFinished()
         XCTAssertEqual(c.state, .attract)
         XCTAssertEqual(link.lastCommand?.cmd, .start)  // 감지 재개
     }

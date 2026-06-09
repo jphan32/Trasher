@@ -25,22 +25,28 @@ struct SampleImageFetcher: PhotoFetcher {
     }
 }
 
-/// 데모용 분류기 — pet/can/other를 매칭 팁과 함께 회전(데모에서 카테고리=팁 일관).
+/// 데모용 분류기 — 4가지를 팁·에코포인트와 함께 회전(보상 티어 2/2/1/0 시연).
+/// pet/can(재활용·고점수), other-유리(재활용·중점수), other-일반쓰레기(비재활용·0점).
 final class DemoClassifier: ClassificationService, @unchecked Sendable {
     private let lock = NSLock()
     private var index = 0
-    private let items: [(String, String)] = [
-        ("pet", "페트병은 라벨을 떼고 내용물을 비운 뒤 압착해 투명 페트 전용함에 배출해요."),
-        ("can", "캔은 내용물을 비우고 물로 헹군 뒤 납작하게 만들어 캔류로 배출해요."),
-        ("other", "재활용이 어려운 일반 쓰레기는 종량제 봉투에 배출해요."),
+    // (category, tip, ecoPoints, recyclable)
+    private let items: [(String, String, Int, Bool)] = [
+        ("pet", "페트병은 라벨을 떼고 내용물을 비운 뒤 압착해 투명 페트 전용함에 배출해요.", 60, true),
+        ("can", "캔은 내용물을 비우고 물로 헹군 뒤 납작하게 만들어 캔류로 배출해요.", 55, true),
+        ("other", "유리병은 색깔별로 모아 유리류 전용함에 배출하면 재활용돼요.", 30, true),
+        ("other", "재활용이 어려운 일반 쓰레기는 종량제 봉투에 배출해요.", 0, false),
     ]
     func classify(cycle: Int, on device: DeviceInfo) async throws -> RawClassification {
-        let item = lock.withLock { () -> (String, String) in
+        let item = lock.withLock { () -> (String, String, Int, Bool) in
             let picked = items[index % items.count]
             index += 1
             return picked
         }
-        return RawClassification(label: item.0, confidence: 0.95, description: item.1)
+        return RawClassification(
+            label: item.0, confidence: 0.95, description: item.1,
+            ecoPoints: item.2, recyclable: item.3
+        )
     }
 }
 
@@ -77,8 +83,8 @@ final class DemoDriver: PeripheralLink {
             let category = pendingCategory                   // 분류 결과대로 sort(카테고리=팁 일치)
             emit(.sorting, lastSort: category); await sleep(1.3)
             emit(.idle, lastSort: category)                  // reward 진입
-            await sleep(3.5)                                 // 결과/씨앗 표시
-            coordinator?.seedInteractionFinished()
+            await sleep(4.5)                                 // 결과/보상 표시(에코포인트+사탕 이펙트)
+            coordinator?.rewardFinished()
         }
     }
 

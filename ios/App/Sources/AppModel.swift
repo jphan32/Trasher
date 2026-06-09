@@ -9,7 +9,7 @@ import UIKit
 @MainActor
 final class AppModel: ObservableObject {
     @Published private(set) var model: ScreenModel
-    @Published var drawnSeed: Seed?
+    @Published private(set) var ecoReward: EcoReward?  // 에코포인트→막대사탕 보상(reward 표시, §4.6)
     @Published private(set) var photo: UIImage?   // 투입된 쓰레기 사진(processing/reward 표시)
     @Published private(set) var tip: String?      // 재활용 팁(reward 부가정보)
     @Published private(set) var step: CycleStep?  // 현재 처리 단계(촬영→AI인식→이동→분류)
@@ -20,7 +20,6 @@ final class AppModel: ObservableObject {
     private let coordinator: SessionCoordinator
     private let central: BLECentral?      // 데모 모드에서는 nil
     private let demo: DemoDriver?          // 실 모드에서는 nil
-    private let seedReward = SeedReward()
     private var heartbeatTask: Task<Void, Never>?
 
     /// demo=true(또는 --demo / TRASHER_DEMO=1)면 Pi 없이 자동 사이클 시연.
@@ -57,6 +56,7 @@ final class AppModel: ObservableObject {
         coordinator.onPhotoData = { [weak self] data in self?.photo = UIImage(data: data) }
         coordinator.onCycleComplete = { [weak self] category in self?.recordSort(category) }
         coordinator.onTip = { [weak self] tip in self?.tip = tip }
+        coordinator.onEcoReward = { [weak self] reward in self?.ecoReward = reward }
 
         central?.coordinator = coordinator
         demo?.coordinator = coordinator
@@ -76,7 +76,7 @@ final class AppModel: ObservableObject {
     private func apply(_ state: SessionCoordinator.SessionState) {
         model = screenModel(for: state)
         step = cycleStep(for: state)  // 진행 스테퍼 단계
-        if case .reward = state {} else { drawnSeed = nil }  // 보상 화면 떠날 때 초기화
+        if case .reward = state {} else { ecoReward = nil }  // 보상 화면 떠날 때 초기화
         switch state {                                        // 대기/연결끊김 복귀 시 사진·팁 초기화
         case .attract, .disconnected:
             photo = nil
@@ -85,15 +85,10 @@ final class AppModel: ObservableObject {
         }
     }
 
-    // 씨앗 추첨(reward 화면에서 호출)
-    func drawSeed() {
-        drawnSeed = seedReward.draw()
-    }
-
-    // 씨앗 받기 완료 → 어트랙트 복귀 + 감지 재개(§2.1)
-    func finishSeed() {
-        drawnSeed = nil
-        coordinator.seedInteractionFinished()
+    // 보상 수령 완료 → 어트랙트 복귀 + 감지 재개(§2.1)
+    func finishReward() {
+        ecoReward = nil
+        coordinator.rewardFinished()
     }
 
     // 운영자(정비) 명령
@@ -105,8 +100,6 @@ final class AppModel: ObservableObject {
     func resumeScanning() {
         central?.start()
     }
-
-    var seeds: [Seed] { seedReward.seeds }  // drawSeed와 동일 인스턴스 사용(분기 방지)
 
     // MARK: 누적 집계 영속(UserDefaults)
     private func recordSort(_ category: WasteCategory) {
