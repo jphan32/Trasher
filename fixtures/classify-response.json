@@ -1,9 +1,10 @@
 {
   "proto": 1,
-  "note": "Pi POST /classify/{cycle} 응답 골든. Pi(classify.schema 직렬화) ↔ iOS(PiClassificationService 파싱)를 같은 파일로 검증해 드리프트를 막는다. docs/protocol.md §4.4. 값은 정규화 완료(소문자 category, confidence 0~1, 트림된 description).",
+  "note": "Pi POST /classify/{cycle} 응답 골든. Pi(classify.schema 직렬화) ↔ iOS(PiClassificationService 파싱)를 같은 파일로 검증해 드리프트를 막는다. docs/protocol.md §4.4. 값은 정규화 완료(소문자 category, confidence 0~1, 트림된 description, eco_points 0~100 정수, recyclable 불리언). eco_points/recyclable은 iPad 전용 표시·보상 정보(BLE 미전달, §4.6).",
   "cases": [
-    {"category": "pet", "description": "페트병은 라벨을 떼고 내용물을 비운 뒤 압착해 투명 페트 전용함에 배출하세요.", "confidence": 0.93},
-    {"category": "can", "description": "캔은 내용물을 비우고 헹군 뒤 납작하게 만들어 캔류로 배출하세요.", "confidence": 0.88},
-    {"category": "other", "description": "재활용이 어려운 일반 쓰레기는 종량제 봉투에 배출하세요.", "confidence": 0.5}
+    {"category": "pet", "description": "페트병은 라벨을 떼고 내용물을 비운 뒤 압착해 투명 페트 전용함에 배출하세요.", "confidence": 0.93, "eco_points": 60, "recyclable": true},
+    {"category": "can", "description": "캔은 내용물을 비우고 헹군 뒤 납작하게 만들어 캔류로 배출하세요.", "confidence": 0.88, "eco_points": 55, "recyclable": true},
+    {"category": "other", "description": "유리병은 색깔별로 모아 유리류 전용함에 배출하면 재활용돼요.", "confidence": 0.7, "eco_points": 30, "recyclable": true},
+    {"category": "other", "description": "재활용이 어려운 일반 쓰레기는 종량제 봉투에 배출하세요.", "confidence": 0.5, "eco_points": 0, "recyclable": false}
   ]
 }

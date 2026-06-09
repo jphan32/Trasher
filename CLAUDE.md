@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 프로젝트 개요
 
-순환자원 홍보용 프로토타이핑 프로젝트. 가칭 **"AI 쓰레기 자동 분류기"** (제목은 변경될 수 있음). 전시/체험 부스에서 참여자가 쓰레기를 투입하면, AI가 종류를 판별하고 컨베이어 벨트가 자동으로 분류한 뒤, 보상으로 씨앗 상품을 제공하는 인터랙티브 데모.
+순환자원 홍보용 프로토타이핑 프로젝트. 가칭 **"AI 쓰레기 자동 분류기"** (제목은 변경될 수 있음). 전시/체험 부스에서 참여자가 쓰레기를 투입하면, AI가 종류를 판별하고 컨베이어 벨트가 자동으로 분류한 뒤, AI가 산출한 **탄소절감 에코포인트**에 따라 **막대사탕 1~2개**를 보상으로 제공하는 인터랙티브 데모.
 
 이 저장소는 **모노레포**다. 두 구성 요소(iPad 앱, Pi 제어 프로그램)와 공유 문서가 한 저장소에 위치한다.
 
@@ -43,7 +43,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
    - Raspberry Pi로부터 받은 쓰레기 사진을 **외부 서버 API**로 보내 종류를 판별한다.
    - 판별 결과를 Raspberry Pi로 다시 전달한다.
    - 전체 진행 과정을 참여자가 볼 수 있도록 **시각적으로 표현**한다.
-   - 분류 완료 후 **간단한 유저 인터랙션**으로 씨앗 5종 중 1개를 선정·표시하여 참여자에게 제공한다.
+   - 분류 완료 후 AI가 산출한 **탄소절감 에코포인트**를 표시하고, 그 수치에 따라 **막대사탕 1~2개**의 당첨 이펙트를 출력해 참여자에게 제공한다. "기타"로 분류돼도 재활용 가능(비일반쓰레기)하면 에코포인트를 측정하고 굿즈를 제공한다. (보상 모델: `docs/protocol.md` §4.6)
 
 2. **Raspberry Pi 제어 프로그램** — 하드웨어 제어 & 비전 트리거
    - 카메라 영상의 **변이(motion/변화)를 추적**하다가 쓰레기 투입을 검출하면 사진을 촬영해 iPad 앱으로 전송한다.
@@ -62,10 +62,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 [iPad] ClassificationService(분류 API) 호출 → 종류 판별 → 3분류로 정규화
 [iPad] 진행 과정 시각화 → 결과(페트/캔/기타)를 BLE로 Pi에 전송
 [Pi]   결과 수신 → 서보 모터로 경로 설정 → 컨베이어 벨트 구동 → 이동 완료
-[iPad] 분류 완료 → 씨앗 5종 중 1개 랜덤 추첨 인터랙션 → 참여자에게 제공
+[iPad] 분류 완료 → 에코포인트 표시 + 막대사탕 1~2개 당첨 이펙트 → 참여자에게 제공
 ```
 
-> **사이클 게이팅:** iPad가 결과/씨앗 화면에 있는 동안 `Command{stop}`으로 Pi 감지를 멈추고, 어트랙트 화면 복귀 시 `Command{start}`로 재개한다. iPad가 인테이크 타이밍을 통제하므로 참여자 간 흐름이 겹치지 않는다. (`docs/protocol.md` §2.1)
+> **사이클 게이팅:** iPad가 결과/보상 화면에 있는 동안 `Command{stop}`으로 Pi 감지를 멈추고, 어트랙트 화면 복귀 시 `Command{start}`로 재개한다. iPad가 인테이크 타이밍을 통제하므로 참여자 간 흐름이 겹치지 않는다. (`docs/protocol.md` §2.1)
 
 ## 핵심 설계 고려사항
 
@@ -74,7 +74,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **분류 카테고리 정규화는 iPad 책임.** 외부 API의 출력 라벨과 Pi가 처리하는 3분류("페트"/"캔"/"기타")는 다를 수 있다. API 라벨 → 3분류 매핑을 iPad의 `ClassificationService` 계층에서 수행하여 Pi에는 항상 3가지 중 하나만 전달한다.
 - **분류 API는 추상화 뒤에 둔다.** iPad에 `ClassificationService.classify(cycle:on:)` + `MockClassificationService`(개발/데모) / `PiClassificationService`(실서비스: Pi `POST /classify/{cycle}` 호출). 앱의 나머지 코드는 mock/real을 구분하지 않는다.
 - **분류 키는 서버 측(Pi)에.** GCP 서비스 계정 키(`secret/`, gitignore됨)는 배포 iPad에 넣지 않는다. **Pi가 키를 보유**하고 로컬 사진을 읽어 Gemini를 호출한다(`/classify` 엔드포인트). iPad는 cycle ID만 보내고 결과를 핸들링(이미지 재업로드 없음 → 트래픽 최소화). Pi에 인터넷이 필요 — 합의된 "인터넷 공유 라우터" 구조 전제(Pi-as-AP 아님).
-- **재활용 팁은 iPad 전용 표시.** Gemini가 3분류와 함께 반환하는 `description`(재활용 팁)은 BLE로 Pi에 보내지 않고(Pi는 3분류만 필요) iPad reward 화면에 부가정보로만 표시한다. BLE 계약 불변.
+- **재활용 팁·에코포인트는 iPad 전용 표시.** Gemini가 3분류와 함께 반환하는 `description`(재활용 팁)·`eco_points`(탄소절감 에코포인트)·`recyclable`(재활용 가능 여부)은 BLE로 Pi에 보내지 않고(Pi는 3분류만 필요) iPad reward 화면에 표시·보상 산출(막대사탕 1~2개)에만 쓴다. BLE `ClassificationResult` 계약 불변. 보상 모델은 `docs/protocol.md` §4.6.
 - **동기적 대기 흐름.** Pi는 결과를 받을 때까지 멈춰 대기하므로, 타임아웃/에러(HTTP 실패, API 실패, BLE 끊김) 시 폴백 동작("기타"로 처리 등)을 정의해야 한다.
 - **상시 연결 유지.** 전시 환경에서 장시간 무인 운영되므로 BLE 재연결·WiFi 재연결·상태 복구가 안정성의 핵심이다.
 
