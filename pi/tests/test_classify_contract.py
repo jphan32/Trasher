@@ -31,5 +31,8 @@ def test_response_contract_roundtrips(case: dict) -> None:
     assert c.category in WASTE_CATEGORIES
     assert 0.0 <= c.confidence <= 1.0
     assert c.description  # 재활용 팁 존재
+    assert 0 <= c.eco_points <= 100  # 탄소절감 에코포인트 범위
+    assert isinstance(c.recyclable, bool)
+    assert c.recyclable or c.eco_points == 0  # 비재활용은 점수 0 (docs §4.6)
     # 정규화된 골든이므로 from_response→to_dict가 원본과 일치(키/값 보존)
     assert c.to_dict() == case

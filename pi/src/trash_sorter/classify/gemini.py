@@ -102,7 +102,9 @@ class GeminiClassifier:
             if resp.status_code not in _TRANSIENT_STATUS:
                 raise ClassificationError(f"Gemini {resp.status_code}: {resp.text[:300]}")
             if is_last:
-                raise ClassificationError(f"Gemini {resp.status_code} 재시도 소진: {resp.text[:160]}")
+                raise ClassificationError(
+                    f"Gemini {resp.status_code} 재시도 소진: {resp.text[:160]}"
+                )
             self._sleep(self._c.retry_backoff_s * (attempt + 1))
         raise ClassificationError("재시도 소진")  # 도달 불가(루프가 항상 return/raise)
 
@@ -134,12 +136,18 @@ class GeminiClassifier:
 
 
 class MockClassifier:
-    """키/인터넷 없는 dev/sim용 — pet/can/other를 매칭 팁과 함께 회전."""
+    """키/인터넷 없는 dev/sim용 — 4가지를 매칭 팁·에코포인트와 함께 회전.
 
+    보상 티어를 모두 시연: pet(60→사탕2), can(55→사탕2),
+    other-재활용 유리(30→사탕1), other-일반쓰레기(0→사탕0). docs §4.6.
+    """
+
+    # (category, tip, eco_points, recyclable)
     _ITEMS = [
-        ("pet", "페트병은 라벨을 떼고 내용물을 비운 뒤 압착해 투명 페트 전용함에 배출해요."),
-        ("can", "캔은 내용물을 비우고 헹군 뒤 납작하게 만들어 캔류로 배출해요."),
-        ("other", "재활용이 어려운 일반 쓰레기는 종량제 봉투에 배출해요."),
+        ("pet", "페트병은 라벨을 떼고 비운 뒤 압착해 투명 페트 전용함에 배출해요.", 60, True),
+        ("can", "캔은 내용물을 비우고 헹군 뒤 납작하게 펴서 캔류로 배출해요.", 55, True),
+        ("other", "유리병은 색깔별로 모아 유리류 전용함에 배출해요.", 30, True),
+        ("other", "재활용이 어려운 일반 쓰레기는 종량제 봉투에 배출해요.", 0, False),
     ]
 
     def __init__(self) -> None:
@@ -148,8 +156,14 @@ class MockClassifier:
 
     def classify(self, image_bytes: bytes, mime: str = "image/jpeg") -> Classification:
         with self._lock:
-            category, tip = next(self._cycle)
-        return Classification(category=category, description=tip, confidence=0.95)
+            category, tip, eco, recyclable = next(self._cycle)
+        return Classification(
+            category=category,
+            description=tip,
+            confidence=0.95,
+            eco_points=eco,
+            recyclable=recyclable,
+        )
 
 
 def build_classifier(config: ClassifierConfig | None = None) -> Classifier:

@@ -84,6 +84,8 @@ def test_classify_endpoint_returns_result(tmp_path) -> None:
         assert body["category"] in {"pet", "can", "other"}
         assert body["description"]  # 재활용 팁
         assert 0.0 <= body["confidence"] <= 1.0
+        assert 0 <= body["eco_points"] <= 100  # 탄소절감 에코포인트
+        assert isinstance(body["recyclable"], bool)
     finally:
         server.stop()
 

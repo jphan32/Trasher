@@ -40,7 +40,15 @@ class FakeSession:
 
 
 def _gemini_ok(category: str = "can", conf: float = 0.9) -> dict:
-    text = json.dumps({"category": category, "description": "헹궈 배출.", "confidence": conf})
+    text = json.dumps(
+        {
+            "category": category,
+            "description": "헹궈 배출.",
+            "confidence": conf,
+            "eco_points": 55,
+            "recyclable": True,
+        }
+    )
     return {"candidates": [{"content": {"parts": [{"text": text}]}}]}
 
 
@@ -59,10 +67,26 @@ def test_schema_categories() -> None:
 
 
 def test_classification_from_response_normalizes() -> None:
-    c = Classification.from_response({"category": "PET", "confidence": 1.5})
+    c = Classification.from_response(
+        {"category": "PET", "confidence": 1.5, "eco_points": 150, "recyclable": True}
+    )
     assert c.category == "pet"
     assert c.confidence == 1.0
+    assert c.eco_points == 100  # 0~100으로 클램프
+    assert c.recyclable is True
     assert Classification.from_response({"category": "glass"}).category == "other"
+
+
+def test_eco_points_zeroed_when_not_recyclable() -> None:
+    # 재활용 불가면 모델이 점수를 줘도 0으로 강제(보상 일관성). docs §4.6
+    c = Classification.from_response(
+        {"category": "other", "eco_points": 40, "recyclable": False}
+    )
+    assert c.recyclable is False
+    assert c.eco_points == 0
+    # 누락 시 안전 기본값
+    d = Classification.from_response({"category": "other"})
+    assert d.eco_points == 0 and d.recyclable is False
 
 
 def test_gemini_classify_parses_structured_output() -> None:
@@ -82,9 +106,12 @@ def test_gemini_non_200_raises() -> None:
 
 def test_mock_classifier_rotates_with_tips() -> None:
     mc = MockClassifier()
-    cats = [mc.classify(b"x").category for _ in range(3)]
-    assert cats == ["pet", "can", "other"]
-    assert mc.classify(b"x").description  # 팁 비어있지 않음
+    results = [mc.classify(b"x") for _ in range(4)]
+    assert [r.category for r in results] == ["pet", "can", "other", "other"]
+    assert all(r.description for r in results)  # 팁 비어있지 않음
+    # eco_points/recyclable 회전: pet/can/유리는 재활용 양수, 마지막 일반쓰레기는 0
+    assert [r.eco_points for r in results] == [60, 55, 30, 0]
+    assert [r.recyclable for r in results] == [True, True, True, False]
 
 
 def test_build_classifier_falls_back_to_mock_without_key() -> None:
