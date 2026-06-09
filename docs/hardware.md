@@ -75,6 +75,7 @@ CSI 리본을 Pi 카메라 포트에 연결. picamera2로 인식(실기기). 캡
 6. **무하드웨어 리허설**: `uv run trash-sorter --simulate`로 전 사이클 로그 점검(기구 연결 전).
 
 ## 참고
+- **OS 설치·패키지·설정 전체 절차: [`pi-setup.md`](pi-setup.md)** (Raspberry Pi 4B 셋업 가이드)
 - 핀/각도/시간 기본값: `pi/src/trash_sorter/config.py`
 - 물리 시퀀스(홀드→분기→방출→벨트→복귀): `docs/protocol.md` §2.5
 - env 예시: `pi/deploy/trash-sorter.env.example`
