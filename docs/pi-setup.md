@@ -93,25 +93,21 @@
 ```bash
 sudo apt update && sudo apt full-upgrade -y
 
-# 카메라 런타임(libcamera C++ 스택 + rpicam 도구). 캡처 엔진 자체는 이 시스템 패키지가 담당.
-# (Bookworm/Trixie 현재 패키지명은 rpicam-apps. 구이름 libcamera-apps는 전환 패키지)
-sudo apt install -y rpicam-apps
+# 카메라(picamera2 + libcamera Python 바인딩) — pip가 아닌 apt가 신뢰 경로.
+# libcamera 바인딩은 PyPI에 없고 전체 소스 빌드 산물이라 apt 패키지를 그대로 쓴다(§10 system-site).
+sudo apt install -y python3-picamera2 rpicam-apps
 
-# venv용 카메라 빌드 의존성(-dev) — rpi-libcamera/rpi-kms/python-prctl 소스 빌드에 필요(§10)
-sudo apt install -y libcamera-dev libkms++-dev libfmt-dev libdrm-dev \
-                    libcap-dev libatlas-base-dev ffmpeg libopenjp2-7
-
-# 서보 PWM 안정화(하드웨어 타이밍) + BLE + 빌드 도구
+# 서보 PWM 안정화(하드웨어 타이밍) + BLE + 빌드 도구(gpiozero/bless용 빌드 헤더 포함)
 sudo apt install -y pigpio python3-pigpio \
                     bluez libdbus-1-dev libglib2.0-dev \
-                    build-essential git
+                    build-essential libcap-dev git
 
 # uv (Python 환경/의존성 관리)
 curl -LsSf https://astral.sh/uv/install.sh | sh
 source ~/.bashrc   # uv PATH 반영
 ```
 
-> **picamera2/libcamera 주의 (Python 3.12.10 고정 전제)**: 이 프로젝트의 venv는 **pyenv Python 3.12.10**으로 고정한다. apt `python3-libcamera`는 시스템 Python(3.13) ABI로 컴파일돼 3.12.10 venv에서 `import libcamera`가 실패한다. 따라서 venv에서는 **`rpi-libcamera` + `rpi-kms`** 를 pip로 빌드해 시스템 libcamera에 대한 3.12 바인딩을 얻고 `picamera2`(PyPI)를 동작시킨다(§10, `requirements-pi.txt`에 포함). 위 `-dev` 패키지가 그 빌드 전제다.
+> **picamera2/libcamera 주의 (시스템 Python 3.13 + system-site 전제)**: venv는 **apt와 동일한 시스템 Python 3.13**으로 만들고 `--system-site-packages`로 apt `python3-picamera2`/`python3-libcamera`를 import한다(§10). pyenv 3.12.10 등 **다른 Python으로는 안 된다** — libcamera Python 바인딩은 PyPI에 없고, 시스템 libcamera에 대해 빌드해야 하는데(`rpi-libcamera`) **Debian `libcamera-dev`가 내부 헤더(`base/log.h` 등)를 누락**해 venv 빌드가 실패한다. apt 패키지는 전체 소스 빌드 산물이므로 그 문제가 없고, ABI가 시스템 Python(3.13)에 맞춰져 있어 venv도 3.13이어야 한다.
 >
 > 참고: 캡처 엔진(센서·ISP·인코딩)은 어느 경로든 동일한 네이티브 libcamera가 수행하므로 **런타임 카메라 성능 차이는 없다**. 바인딩 패키징만 다르다.
 
@@ -209,20 +205,19 @@ hostname -I                                 # Pi IP 확인(BLE DeviceInfo로도 
 
 저장소를 Pi에 복사(git clone 또는 scp) 후, 배포 스크립트로 설치:
 
-먼저 **§4의 apt `-dev` 패키지가 설치돼 있어야 한다**(rpi-libcamera/rpi-kms/python-prctl 빌드 전제).
+먼저 **§4의 apt `python3-picamera2`가 설치돼 있어야 한다**(system-site로 import할 대상).
 
 ```bash
 git clone <repo-url> ~/trash && cd ~/trash
 cd pi
 
-# venv는 pyenv Python 3.12.10으로 고정(시스템 3.13 아님). pyenv에 3.12.10이 없으면:
-#   pyenv install 3.12.10
-uv venv --python 3.12.10                  # isolated venv (--system-site-packages 사용 안 함)
-uv sync                                   # 크로스플랫폼 + dev 도구
-uv pip install -r requirements-pi.txt     # picamera2 + rpi-libcamera/rpi-kms + gpiozero/bless/opencv
-                                          #   ↳ rpi-libcamera/rpi-kms 컴파일은 Pi 4에서 3분+ 소요
+# venv는 apt와 같은 시스템 Python 3.13으로 만들고 system-site로 apt picamera2/libcamera를 본다.
+# (--system-site-packages 없이는 import libcamera 실패. pyenv 등 다른 Python도 ABI 불일치로 불가)
+uv venv --python /usr/bin/python3 --system-site-packages
+uv sync                                   # 크로스플랫폼 + dev 도구 (system-site 설정 보존됨)
+uv pip install -r requirements-pi.txt     # gpiozero/bless/opencv (picamera2/libcamera는 apt+system-site)
 
-# 카메라 바인딩 검증(실패하면 §4 -dev 패키지 누락 의심)
+# 카메라 바인딩 검증(실패하면 §4 python3-picamera2 누락 또는 system-site 미설정 의심)
 uv run python -c "import picamera2, libcamera; print('camera OK')"
 
 # 무하드웨어 점검(설치 검증)
@@ -232,10 +227,10 @@ uv run trash-sorter --simulate            # 전 사이클 로그
 또는 **systemd 자동 설치**(권장, 부스 무인 기동):
 
 ```bash
-sudo bash pi/deploy/install.sh            # /opt/trash-sorter 복사 + uv sync + 서비스 등록·시작
+sudo bash pi/deploy/install.sh            # /opt/trash-sorter 복사 + venv(system-site) + 서비스 등록·시작
 ```
 
-> `install.sh`는 `uv sync` → `uv pip install -r requirements-pi.txt`를 수행한다(rpi-libcamera/rpi-kms 포함). 따라서 실행 전 **§4의 `-dev` 패키지**가 깔려 있어야 빌드가 성공한다. venv Python을 3.12.10으로 고정하려면 pi 디렉터리에 `.python-version`(`3.12.10`)을 두거나, Pi에서 `uv venv --python 3.12.10`으로 venv를 먼저 구성한 뒤 서비스만 등록한다. (`--system-site-packages`는 사용하지 않는다 — 3.12.10 ABI와 apt 3.13 패키지가 호환되지 않기 때문.)
+> `install.sh`는 `/opt/trash-sorter`에서 `uv venv --python /usr/bin/python3 --system-site-packages` → `uv sync` → `uv pip install -r requirements-pi.txt`를 수행한다. `--system-site-packages`로 만든 venv는 `uv sync`가 설정을 보존하므로(검증됨) apt picamera2/libcamera가 그대로 import된다.
 
 ---
 
@@ -323,14 +318,14 @@ uv run trash-sorter --simulate
 ## 14. 설정 체크리스트
 
 - [ ] Pi OS 64-bit Bookworm Lite, 호스트명 `sorter-01`, SSH/WiFi/로캘
-- [ ] `rpicam-still` 카메라 동작 + venv에서 `import picamera2, libcamera` 성공(§4 -dev + rpi-libcamera/rpi-kms)
+- [ ] `rpicam-still` 카메라 동작 + venv에서 `import picamera2, libcamera` 성공(apt python3-picamera2 + system-site)
 - [ ] `pigpiod` enable + `GPIOZERO_PIN_FACTORY=pigpio`
 - [ ] `bluetooth` 서비스 active, `pi`가 `bluetooth` 그룹
 - [ ] `pi` ∈ `gpio,video,bluetooth,dialout`
 - [ ] WiFi = 인터넷 라우터, DHCP 예약, AP격리 OFF, **WiFi 절전 off**
 - [ ] 인터넷 도달(Gemini) 확인, 포트 8080 LAN 허용
 - [ ] 서보 3·모터1 **외부 전원** + Pi와 **공통 GND** (Pi 5V 직급전 금지)
-- [ ] 앱 설치(uv venv `--python 3.12.10` + requirements-pi[rpi-libcamera/rpi-kms 포함]) / `install.sh`
+- [ ] 앱 설치(uv venv `--python /usr/bin/python3 --system-site-packages` + requirements-pi) / `install.sh`
 - [ ] `/etc/trash-sorter.env` (핀·임계값·`TRASH_GEMINI_CREDENTIALS`)
 - [ ] 비밀키 `/opt/trash-sorter/secret/` 배치(600), git 미커밋
 - [ ] 캘리브레이션(서보각/벨트시간/임계값) 완료

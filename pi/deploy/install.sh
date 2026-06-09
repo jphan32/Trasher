@@ -25,10 +25,13 @@ echo "[1/5] 코드 복사 → $APP_DIR"
 mkdir -p "$APP_DIR"
 cp -rf "$PI_DIR"/{pyproject.toml,uv.lock,requirements-pi.txt,src} "$APP_DIR"/
 
-echo "[2/5] 의존성 설치(uv sync + Pi 하드웨어 extras)"
+echo "[2/5] 의존성 설치(system-site venv + uv sync + Pi 하드웨어 extras)"
 cd "$APP_DIR"
-uv sync
-uv pip install -r requirements-pi.txt
+# venv는 apt와 같은 시스템 Python 3.13 + system-site로 만들어 apt picamera2/libcamera를 import.
+# (pyenv 등 다른 Python·system-site 미설정 시 import libcamera 실패 — docs/pi-setup.md §4/§10)
+uv venv --python /usr/bin/python3 --system-site-packages
+uv sync                                   # system-site 설정 보존됨
+uv pip install -r requirements-pi.txt     # gpiozero/bless/opencv (picamera2/libcamera는 apt+system-site)
 
 echo "[3/5] 환경파일 설치(없을 때만): $ENV_DST"
 if [[ ! -f "$ENV_DST" ]]; then
