@@ -11,14 +11,16 @@ public struct EcoReward: Equatable, Sendable {
 
     /// 사탕 2개 임계값(이상이면 2개). 튜닝 대상. docs §4.6.
     public static let twoLollipopThreshold = 50
+    /// 에코포인트 상한(Pi schema와 동일). 표시·링 게이지가 100% 넘지 않게 클램프.
+    public static let maxPoints = 100
 
     /// eco_points/recyclable로부터 보상을 결정적으로 산출.
     /// - 재활용 불가 또는 0점 → 0개
     /// - 0 < 점수 < 임계값 → 1개
     /// - 점수 >= 임계값 → 2개
     public init(ecoPoints: Int, recyclable: Bool) {
-        // 비재활용은 점수 0으로 정규화(보상 일관성). Pi schema도 동일하게 강제.
-        let points = recyclable ? max(0, ecoPoints) : 0
+        // 비재활용은 점수 0으로 정규화(보상 일관성). 0~100 클램프(Pi schema와 동일).
+        let points = recyclable ? min(Self.maxPoints, max(0, ecoPoints)) : 0
         self.ecoPoints = points
         self.recyclable = recyclable
         if points <= 0 {

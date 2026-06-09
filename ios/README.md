@@ -10,9 +10,9 @@ AI 쓰레기 자동 분류기의 iPad 측. SwiftUI + CoreBluetooth(Central) + UR
   - `Protocol.swift` — GATT UUID·enum·Codable 메시지 (docs/protocol.md 미러, Pi `protocol.py`와 동기)
   - `Classification.swift` — `ClassificationService.classify(cycle:on:)` + `MockClassificationService` + `CategoryNormalizer`(§4.4)
   - `PiClassification.swift` — `PiClassificationService`(Pi `/classify/{cycle}` 호출)
-  - `SessionCoordinator.swift` — 사이클 조정(게이팅/정합화/폴백/팁), `PhotoFetcher`, `CycleStep`(단계 매핑), `Presentation`/`SortStats`
+  - `SessionCoordinator.swift` — 사이클 조정(게이팅/정합화/폴백/팁/보상), `EcoReward`(§4.6), `PhotoFetcher`, `CycleStep`(단계 매핑), `Presentation`/`SortStats`
 - **Xcode 앱 타깃** (`ios/App`, 구현됨) — `TrasherCore`를 소비하는 iOS 앱: CoreBluetooth Central, 사진 HTTP 다운로드,
-  SwiftUI 화면(어트랙트→진행 스테퍼+사진+AI설명→결과+씨앗), 운영자 정비 화면, 데모 모드.
+  SwiftUI 화면(어트랙트→진행 스테퍼+사진+AI설명→결과+에코포인트/막대사탕 보상), 운영자 정비 화면, 데모 모드.
 
 ## 코어 개발/테스트 (macOS)
 
@@ -41,7 +41,7 @@ xcodebuild -project Trasher.xcodeproj -scheme Trasher \
 # 또는 Xcode로 Trasher.xcodeproj 열어 실기기 실행(BLE는 실기기 필수)
 ```
 
-화면: 어트랙트→진행→결과(+씨앗 추첨)→오류/정지/점검. 좌상단 3초 길게 눌러 운영자 정비 화면.
+화면: 어트랙트→진행→결과(+에코포인트/막대사탕 보상)→오류/정지/점검. 좌상단 3초 길게 눌러 운영자 정비 화면.
 디자인: 유기적 에디토리얼-식물 컨셉(크림 페이퍼/딥 포레스트/새싹·클레이), 카테고리 색 구분.
 
 ## 전시 무인운영(키오스크) 메모

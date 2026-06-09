@@ -87,6 +87,11 @@ def test_eco_points_zeroed_when_not_recyclable() -> None:
     # 누락 시 안전 기본값
     d = Classification.from_response({"category": "other"})
     assert d.eco_points == 0 and d.recyclable is False
+    # 엄격 정규화: 문자열 "false"가 truthy로 새지 않는다(실제 bool True만 인정)
+    e = Classification.from_response(
+        {"category": "pet", "eco_points": 50, "recyclable": "false"}
+    )
+    assert e.recyclable is False and e.eco_points == 0
 
 
 def test_gemini_classify_parses_structured_output() -> None:

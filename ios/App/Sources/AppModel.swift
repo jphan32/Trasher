@@ -76,11 +76,14 @@ final class AppModel: ObservableObject {
     private func apply(_ state: SessionCoordinator.SessionState) {
         model = screenModel(for: state)
         step = cycleStep(for: state)  // 진행 스테퍼 단계
-        if case .reward = state {} else { ecoReward = nil }  // 보상 화면 떠날 때 초기화
-        switch state {                                        // 대기/연결끊김 복귀 시 사진·팁 초기화
+        // ecoReward는 분류 직후(processing 중) 세팅되어 reward 화면까지 유지되어야 한다.
+        // 따라서 사진·팁과 동일하게 사이클 종료(어트랙트/연결끊김) 시에만 초기화한다.
+        // (reward 직전 sorting 상태에서 지우면 보상이 0으로 표시되는 회귀 — 주의)
+        switch state {
         case .attract, .disconnected:
             photo = nil
             tip = nil
+            ecoReward = nil
         default: break
         }
     }

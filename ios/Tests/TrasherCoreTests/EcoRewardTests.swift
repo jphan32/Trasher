@@ -51,4 +51,10 @@ final class EcoRewardTests: XCTestCase {
         XCTAssertEqual(EcoReward(ecoPoints: -5, recyclable: true).ecoPoints, 0)
         XCTAssertEqual(EcoReward(ecoPoints: -5, recyclable: true).lollipops, 0)
     }
+
+    func testPointsClampedToHundred() {
+        // Pi schema와 동일하게 상한 100(링 게이지 100% 초과 방지).
+        XCTAssertEqual(EcoReward(ecoPoints: 150, recyclable: true).ecoPoints, 100)
+        XCTAssertEqual(EcoReward(ecoPoints: 150, recyclable: true).lollipops, 2)
+    }
 }

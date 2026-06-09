@@ -52,7 +52,8 @@ class Classification:
         except (TypeError, ValueError):
             eco_points = 0
         eco_points = max(ECO_POINTS_MIN, min(ECO_POINTS_MAX, eco_points))
-        recyclable = bool(d.get("recyclable", False))
+        # 엄격 정규화: 실제 boolean True만 인정(문자열 "false" 등이 truthy로 새는 것 방지).
+        recyclable = d.get("recyclable") is True
         # 재활용 불가면 에코포인트는 0으로 강제(보상 산출 일관성). docs §4.6
         if not recyclable:
             eco_points = 0
