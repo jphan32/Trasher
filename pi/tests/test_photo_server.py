@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import socket
 import urllib.error
 import urllib.request
 
@@ -35,6 +36,52 @@ def test_retention_prunes_oldest(tmp_path) -> None:
     store.prune()
     remaining = sorted(int(p.stem) for p in (tmp_path / "photos").glob("*.jpg"))
     assert remaining == [3, 4]  # 최근 2장만
+
+
+def test_prune_tolerates_missing_file(tmp_path) -> None:
+    # glob~stat 사이 파일이 사라져도(TOCTOU) prune이 예외 없이 진행되어야 메인 루프가 보호된다.
+    photos = tmp_path / "photos"
+    store = PhotoStore(photos, retention=1)
+    (photos / "1.jpg").write_bytes(b"x")
+    # stat 시 FileNotFoundError를 던지는 깨진 심볼릭 링크(glob에는 잡히지만 stat은 실패).
+    (photos / "2.jpg").symlink_to(photos / "does-not-exist.jpg")
+    store.prune()  # raise하지 않아야 함
+
+
+def test_classify_accepts_request_with_body(tmp_path) -> None:
+    # m5: 본문이 있는 POST도 본문을 소비해 정상 200 응답(연결 desync 방지).
+    store = PhotoStore(tmp_path / "photos")
+    store.path_for(4).write_bytes(b"\xff\xd8jpeg\xff\xd9")
+    server = PhotoServer(store, port=0, host="127.0.0.1", classifier=MockClassifier())
+    server.start()
+    try:
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{server.port}/classify/4", data=b"ignored-body", method="POST"
+        )
+        with urllib.request.urlopen(req, timeout=2) as resp:
+            assert resp.status == 200
+            assert json.loads(resp.read())["category"] in {"pet", "can", "other"}
+    finally:
+        server.stop()
+
+
+def test_classify_rejects_malformed_content_length(tmp_path) -> None:
+    # m5: 잘못된 Content-Length는 핸들러를 죽이지 않고 400으로 정리(워커 보호).
+    # urllib이 헤더를 정규화하므로 raw 소켓으로 malformed framing을 직접 보낸다.
+    store = PhotoStore(tmp_path / "photos")
+    store.path_for(5).write_bytes(b"\xff\xd8")
+    server = PhotoServer(store, port=0, host="127.0.0.1", classifier=MockClassifier())
+    server.start()
+    try:
+        with socket.create_connection(("127.0.0.1", server.port), timeout=2) as sock:
+            sock.sendall(
+                b"POST /classify/5 HTTP/1.1\r\nHost: x\r\n"
+                b"Content-Length: abc\r\nConnection: close\r\n\r\n"
+            )
+            status_line = sock.recv(256).split(b"\r\n", 1)[0]
+        assert b"400" in status_line
+    finally:
+        server.stop()
 
 
 def test_server_serves_existing_photo(tmp_path) -> None:

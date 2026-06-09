@@ -21,6 +21,7 @@ from ..classify import Classifier
 
 _PHOTO_RE = re.compile(r"/photos/(\d+)\.jpg")
 _CLASSIFY_RE = re.compile(r"/classify/(\d+)")
+_MAX_BODY_BYTES = 1 << 20  # /classify 본문 상한(1MB) — 과대 framing 방어
 
 
 def get_lan_ip() -> str:
@@ -49,10 +50,17 @@ class PhotoStore:
         return f"/photos/{cycle}.jpg"
 
     def prune(self) -> None:
-        """최근 retention장만 남기고 오래된 사진 삭제(mtime 기준)."""
-        files = sorted(self._dir.glob("*.jpg"), key=lambda p: p.stat().st_mtime)
-        for p in files[: max(0, len(files) - self._retention)]:
-            p.unlink(missing_ok=True)
+        """최근 retention장만 남기고 오래된 사진 삭제(mtime 기준).
+
+        glob~stat 사이 파일이 사라지면(TOCTOU) OSError가 날 수 있다. prune은 베스트-에포트라
+        실패가 오케스트레이터 메인 루프(tick)를 죽이지 않도록 통째로 가드한다.
+        """
+        try:
+            files = sorted(self._dir.glob("*.jpg"), key=lambda p: p.stat().st_mtime)
+            for p in files[: max(0, len(files) - self._retention)]:
+                p.unlink(missing_ok=True)
+        except OSError:
+            pass  # 정리 실패는 무시(다음 사이클에 재시도)
 
 
 def _make_handler(
@@ -79,6 +87,22 @@ def _make_handler(
 
         def do_POST(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
             # POST /classify/{cycle} — 로컬 사진을 읽어 분류(이미지 재업로드 없음)
+            # 요청 본문을 끝까지 소비해야 keep-alive 연결이 다음 요청과 desync되지 않는다
+            # (iPad는 빈 본문을 보내 보통 no-op). 잘못된 framing은 400/413으로 정리.
+            raw_len = self.headers.get("Content-Length")
+            try:
+                length = int(raw_len) if raw_len is not None else 0
+            except ValueError:
+                self.send_error(400)
+                return
+            if length < 0:
+                self.send_error(400)
+                return
+            if length > _MAX_BODY_BYTES:
+                self.send_error(413)
+                return
+            if length > 0:
+                self.rfile.read(length)
             m = _CLASSIFY_RE.fullmatch(self.path)
             if not m:
                 self.send_error(404)

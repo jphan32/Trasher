@@ -61,23 +61,24 @@ class GeminiClassifier:
         self._sleep = sleep
 
     def _get_session(self) -> _Session:
-        session = self._session
-        if session is None:
-            from google.auth.transport.requests import AuthorizedSession
-            from google.oauth2 import service_account
+        # lazy-init만 짧게 직렬화한다. 백오프 sleep을 포함한 재시도 루프를 락 밖에 두어,
+        # 한 요청의 재시도 대기가 다른 요청을 막지 않게 한다. AuthorizedSession은 토큰 갱신을
+        # 내부적으로 잠그고, 부스는 단일 사용자(동시 분류 사실상 없음)라 동시 post는 안전.
+        with self._lock:
+            if self._session is None:
+                from google.auth.transport.requests import AuthorizedSession
+                from google.oauth2 import service_account
 
-            creds = service_account.Credentials.from_service_account_file(
-                self._c.credentials_path, scopes=[self._c.scope]
-            )
-            session = cast("_Session", AuthorizedSession(creds))
-            self._session = session
-        return session
+                creds = service_account.Credentials.from_service_account_file(
+                    self._c.credentials_path, scopes=[self._c.scope]
+                )
+                self._session = cast("_Session", AuthorizedSession(creds))
+            return self._session
 
     def classify(self, image_bytes: bytes, mime: str = "image/jpeg") -> Classification:
         url = f"{self._c.api_base}/models/{self._c.model}:generateContent"
         body = self._build_body(image_bytes, mime)
-        with self._lock:  # 세션 lazy-init 경쟁 + 동시 호출 직렬화
-            resp = self._post_with_retry(url, body)
+        resp = self._post_with_retry(url, body)  # 락 밖 — 백오프 sleep이 다른 요청을 막지 않음
         text = self._extract_text(resp.json())
         try:
             payload = json.loads(text)
@@ -86,12 +87,17 @@ class GeminiClassifier:
         return Classification.from_response(payload)
 
     def _post_with_retry(self, url: str, body: dict) -> _Response:
-        """transient(429/5xx/네트워크) 오류에 백오프 재시도. 그 외 상태는 즉시 실패."""
+        """transient(429/5xx/네트워크) 오류에 백오프 재시도. 그 외 상태는 즉시 실패.
+
+        실제 HTTP 호출(session.post)만 락으로 직렬화해 requests.Session 동시 사용을 보호하고,
+        백오프 sleep은 락 밖에서 수행해 한 요청의 재시도 대기가 다른 요청을 막지 않게 한다(m3).
+        """
         session = self._get_session()  # 자격증명 오류는 transient 아님 → 즉시 전파
         for attempt in range(self._c.max_retries + 1):
             is_last = attempt == self._c.max_retries
             try:
-                resp = session.post(url, json=body, timeout=self._c.timeout_s)
+                with self._lock:
+                    resp = session.post(url, json=body, timeout=self._c.timeout_s)
             except Exception as e:  # noqa: BLE001 - 네트워크 오류는 transient로 재시도
                 if is_last:
                     raise ClassificationError(f"네트워크 오류: {type(e).__name__}") from e

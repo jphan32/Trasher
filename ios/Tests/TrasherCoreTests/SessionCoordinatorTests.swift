@@ -314,6 +314,19 @@ final class SessionCoordinatorTests: XCTestCase {
         XCTAssertEqual(rewards.first?.lollipops, 0)
     }
 
+    func testStaleStatusSeqIgnored() async {
+        // M1: 순서 역전된(오래된) seq status는 기각되어 reward가 processing으로 되돌아가지 않는다.
+        let (c, _, _) = make()
+        c.connected(device)
+        await c.received(PhotoReady(cycle: 1, path: "/p/1.jpg"))  // activeCycle=1
+        c.received(Status(state: .sorting, cycle: 1, seq: 5, lastSort: .pet))
+        c.received(Status(state: .idle, cycle: 1, seq: 6, lastSort: .pet))
+        XCTAssertEqual(c.state, .reward(.pet))
+        // 뒤늦게 도착한 과거 패킷(seq=4 < 6) → 무시되어야 함
+        c.received(Status(state: .awaitingResult, cycle: 1, seq: 4))
+        XCTAssertEqual(c.state, .reward(.pet))  // 상태 역전 없음
+    }
+
     func testStallDoesNotClobberReward() async {
         let (c, _, clock) = make()
         c.connected(device)

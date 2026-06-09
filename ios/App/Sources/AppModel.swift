@@ -63,7 +63,8 @@ final class AppModel: ObservableObject {
         central?.start()
         demo?.start()
 
-        // weak self 반복 Task — self 해제 시 자동 종료(별도 deinit 정리 불필요).
+        // weak self 반복 Task — self 해제 시 루프가 자동 종료된다(다음 tick에서). deinit에서
+        // 즉시 취소해 잔여 sleep(최대 1초) 없이 정리한다.
         heartbeatTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
@@ -71,6 +72,10 @@ final class AppModel: ObservableObject {
                 self.coordinator.checkHeartbeat()
             }
         }
+    }
+
+    deinit {
+        heartbeatTask?.cancel()
     }
 
     private func apply(_ state: SessionCoordinator.SessionState) {

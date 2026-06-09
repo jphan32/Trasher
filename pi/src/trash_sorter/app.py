@@ -172,10 +172,10 @@ class Orchestrator:
                         self._sm.set_maintenance(_truthy(cmd.arg))
                 case CommandType.SORT:
                     # 비-블로킹 진단 sort: begin 후 tick에서 T_belt 경과 시 finish.
-                    # IDLE에서만, 중복 금지. 잘못된 arg는 WasteCategory()가 ValueError→ok=False.
-                    cat = WasteCategory(cmd.arg or "")
-                    if self._sm.state is PiState.IDLE and self._manual_sort_since is None:
-                        self._sorter.begin_sort(cat)
+                    # 잘못된 카테고리·비-IDLE·중복은 '거부'(ok=False, err=None) — 내부오류 아님(m6).
+                    valid = self._require_arg(cmd.arg, tuple(c.value for c in WasteCategory))
+                    if valid and self._sm.state is PiState.IDLE and self._manual_sort_since is None:
+                        self._sorter.begin_sort(WasteCategory((cmd.arg or "").lower()))
                         self._manual_sort_since = self._clock()
                     else:
                         ok = False
@@ -187,8 +187,8 @@ class Orchestrator:
                     pass  # 스캐폴드: no-op
         except (ValueError, KeyError):
             ok, err = False, ErrorCode.INTERNAL
-        if not ok and err is None:
-            err = ErrorCode.INTERNAL
+        # 검증 실패(잘못된 arg·비-IDLE sort 등)는 err=None으로 두어 '거부'를 '내부 오류'와 구분한다.
+        # 진짜 내부 예외만 ErrorCode.INTERNAL(except 블록)로 표기. (CommandAck.err은 optional)
         self._ble.publish_command_ack(CommandAck(id=cmd.id, ok=ok, err=err))
         self._publish_status()
 

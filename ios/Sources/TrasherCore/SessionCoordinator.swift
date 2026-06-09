@@ -110,6 +110,10 @@ public final class SessionCoordinator {
     // MARK: Status 수신 — UI 구동 + §2.2 정합화 + §2.1 게이팅
     public func received(_ status: Status) {
         if incompatible { return }       // sticky 차단
+        // BLE notify가 비구조적 Task로 메인액터에 예약되므로 순서 보장이 없다.
+        // seq는 Pi가 단조 증가(snapshot마다 +1)시키므로, 오래된/중복 status를 기각해
+        // 상태 역전(reward→processing)·하트비트 교란을 막는다. 재연결 시 lastSeq=nil로 초기화.
+        if let last = lastSeq, status.seq <= last { return }
         markSeq(status.seq)
         defer { prevPiState = status.state }
 

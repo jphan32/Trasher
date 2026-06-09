@@ -289,7 +289,13 @@ def test_motor_failure_transitions_to_error(tmp_path) -> None:
 
 @pytest.mark.parametrize(
     "cmd_type,arg",
-    [(CommandType.BELT, "sideways"), (CommandType.BELT, None), (CommandType.MAINTENANCE, "maybe")],
+    [
+        (CommandType.BELT, "sideways"),
+        (CommandType.BELT, None),
+        (CommandType.MAINTENANCE, "maybe"),
+        (CommandType.SORT, "glass"),  # 잘못된 카테고리 — 거부(내부오류 아님, m6)
+        (CommandType.SORT, None),
+    ],
 )
 def test_invalid_command_arg_acks_false(tmp_path, cmd_type, arg) -> None:
     orch, ble, _hw, _clock = build(tmp_path, _motion_frames())
@@ -297,6 +303,8 @@ def test_invalid_command_arg_acks_false(tmp_path, cmd_type, arg) -> None:
     orch.tick()
     assert ble.acks[-1].id == 11
     assert ble.acks[-1].ok is False
+    # 검증 실패(거부)는 내부 오류가 아니므로 err=None (m6: INTERNAL과 구분)
+    assert ble.acks[-1].err is None
 
 
 def test_require_arg_rejects_non_string_without_crash(tmp_path) -> None:
