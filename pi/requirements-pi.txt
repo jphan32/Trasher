@@ -2,10 +2,23 @@
 # macOS/CI에서는 설치하지 않는다(Mock 구현으로 동작). pyproject가 아닌 별도 파일로 관리하는 이유:
 # 이 패키지들의 sdist는 Linux에서만 빌드되어 uv universal 해석을 깨뜨리기 때문.
 #
-# Pi에서 설치:
+# Pi에서 설치(venv = pyenv Python 3.12.10):
 #   uv sync                              # 크로스플랫폼 + dev 도구
 #   uv pip install -r requirements-pi.txt  # 하드웨어 의존성
+#
+# ⚠️ 빌드 전제(apt) — 아래 패키지는 소스 빌드되므로 docs/pi-setup.md §4의 -dev 패키지가
+#    먼저 깔려 있어야 한다:
+#    - python-prctl(picamera2 의존) → libcap-dev
+#    - rpi-libcamera / rpi-kms       → libcamera-dev libkms++-dev libfmt-dev libdrm-dev (+ build-essential)
+#    rpi-libcamera/rpi-kms 컴파일은 Pi 4에서 3분 이상 걸릴 수 있다.
+#
+# libcamera 바인딩 메모: apt python3-libcamera는 시스템 Python(3.13) ABI로 컴파일돼
+# pyenv 3.12.10 venv에서 import되지 않는다. 그래서 venv에서는 rpi-libcamera/rpi-kms로
+# 시스템 libcamera에 대한 3.12 바인딩을 빌드해 picamera2가 동작하게 한다.
+# (--system-site-packages 경로는 시스템 Python을 쓸 때만 유효 — 본 프로젝트는 3.12.10 고정)
 picamera2
+rpi-libcamera
+rpi-kms
 opencv-python-headless
 gpiozero
 bless
