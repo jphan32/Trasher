@@ -40,6 +40,8 @@ struct RewardView: View {
         }
         .padding(.vertical, 22)
         .onAppear {
+            // 재사용 대비 상태 초기화(뷰가 .reward로 재진입해도 깨끗이 시작).
+            revealed = false; showResetHint = false; displayedPoints = 0
             stamp = true
             startCountUp(to: reward.ecoPoints)
             startAutoSequence()   // 참가자 무터치: 자동 사탕 공개 + 자동 어트랙트 복귀
@@ -58,12 +60,13 @@ struct RewardView: View {
             HStack(alignment: .center, spacing: 14) {
                 Text(category.displayName)
                     .font(Theme.display(60)).foregroundStyle(.white)
+                    .lineLimit(1).minimumScaleFactor(0.6)
                     .padding(.horizontal, 30).padding(.vertical, 12)
                     .background(Theme.category(category), in: RoundedRectangle(cornerRadius: 22))
                     .scaleEffect(stamp ? 1 : 0.6)
                     .rotationEffect(.degrees(stamp ? 0 : -8))
                     .animation(.spring(response: 0.5, dampingFraction: 0.55), value: stamp)
-                Text("으로\n분류했어요").font(Theme.body(24)).foregroundStyle(Theme.inkSoft)
+                Text("\(category.roParticle)\n분류했어요").font(Theme.body(24)).foregroundStyle(Theme.inkSoft)
             }
             if let tip = app.tip, !tip.isEmpty {
                 TipBox(text: tip)
@@ -172,8 +175,8 @@ struct RewardView: View {
 
     // 에코포인트 카운트업 애니메이션(0 → 목표).
     private func startCountUp(to target: Int) {
+        countTask?.cancel()   // 기존 카운트 취소를 guard보다 먼저(잔여 task가 값 덮어쓰지 않게)
         guard target > 0 else { displayedPoints = 0; return }
-        countTask?.cancel()
         countTask = Task { @MainActor in
             let steps = min(target, 35)
             for i in 0...steps {
@@ -181,6 +184,7 @@ struct RewardView: View {
                 displayedPoints = Int((Double(target) * Double(i) / Double(steps)).rounded())
                 try? await Task.sleep(nanoseconds: 28_000_000)
             }
+            if Task.isCancelled { return }
             displayedPoints = target
         }
     }
@@ -196,9 +200,9 @@ private struct SparkleBurst: View {
         ZStack {
             ForEach(0..<count, id: \.self) { i in
                 let angle = Double(i) / Double(count) * 2 * .pi
-                let mag: CGFloat = 78 + CGFloat(i % 4) * 16   // 버스트 반경 축소(프레임 밖 과도 렌더 방지)
+                let mag: CGFloat = 52 + CGFloat(i % 4) * 12   // 86pt 슬롯 내로 반경 축소(겹침 방지)
                 Text(symbols[i % symbols.count])
-                    .font(.system(size: 22 + CGFloat(i % 3) * 6))
+                    .font(.system(size: 20 + CGFloat(i % 3) * 5))
                     .offset(x: go ? cos(angle) * mag : 0, y: go ? sin(angle) * mag : 0)
                     .opacity(go ? 0 : 1)
                     .scaleEffect(go ? 0.4 : 1)

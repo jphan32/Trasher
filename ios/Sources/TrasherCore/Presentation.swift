@@ -12,6 +12,16 @@ public extension WasteCategory {
         case .other: return "기타"
         }
     }
+
+    /// 한국어 조사 '(으)로' — displayName 받침에 따라 자동 선택(받침 없거나 ㄹ이면 '로').
+    /// 예: 페트로 / 캔으로 / 기타로.
+    var roParticle: String {
+        guard let last = displayName.unicodeScalars.last else { return "으로" }
+        let v = last.value
+        guard v >= 0xAC00, v <= 0xD7A3 else { return "로" }   // 한글 음절이 아니면 '로'
+        let jongseong = (v - 0xAC00) % 28
+        return (jongseong == 0 || jongseong == 8) ? "로" : "으로"  // 0=받침없음, 8=ㄹ
+    }
 }
 
 public enum Screen: String, Equatable, Sendable {
@@ -53,7 +63,7 @@ public func screenModel(for state: SessionCoordinator.SessionState) -> ScreenMod
         return ScreenModel(screen: .processing, title: processingTitle(piState),
                            subtitle: "잠시만 기다려주세요")
     case .reward(let category):
-        return ScreenModel(screen: .reward, title: "\(category.displayName)으로 분류했어요",
+        return ScreenModel(screen: .reward, title: "\(category.displayName)\(category.roParticle) 분류했어요",
                            subtitle: "탄소를 줄였어요! 보상을 받아 가세요", category: category)
     case .error(let code):
         return ScreenModel(screen: .error, title: "잠시 문제가 생겼어요",

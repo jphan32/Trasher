@@ -35,4 +35,13 @@ final class PresentationTests: XCTestCase {
         )
         XCTAssertTrue(screenModel(for: .processing(.awaitingResult)).title.contains("분류"))
     }
+
+    func testRoParticleJosa() {
+        // 받침 없음/ㄹ → '로', 그 외 → '으로'.
+        XCTAssertEqual(WasteCategory.pet.roParticle, "로")    // 페트(트, 받침 없음)
+        XCTAssertEqual(WasteCategory.other.roParticle, "로")  // 기타(타, 받침 없음)
+        XCTAssertEqual(WasteCategory.can.roParticle, "으로")  // 캔(ㄴ 받침)
+        XCTAssertEqual(screenModel(for: .reward(.pet)).title, "페트로 분류했어요")
+        XCTAssertEqual(screenModel(for: .reward(.can)).title, "캔으로 분류했어요")
+    }
 }

@@ -19,7 +19,7 @@ struct SeedlingView: View {
     var body: some View {
         GeometryReader { geo in
             let w = geo.size.width, h = geo.size.height
-            let stemTop = CGPoint(x: w * 0.5 - w * 0.06, y: h * 0.10)
+            let stemTop = CGPoint(x: w * 0.5 - w * 0.06, y: h * 0.16)  // 꽃/열매가 프레임 안에 들도록 여백
             ZStack {
                 pot(w: w, h: h)
 
@@ -39,8 +39,8 @@ struct SeedlingView: View {
                 // 꽃 — 점수 높을 때(>0.65) 줄기 끝에서 개화
                 bloom(at: stemTop, unit: w)
                     .scaleEffect(bloomScale)
-                    .opacity(g > 0.65 ? 1 : 0)
-                    .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.9), value: grow)
+                    .opacity(grow > 0.65 ? 1 : 0)   // 줄기가 충분히 자란 뒤 개화(grow 연동)
+                    .animation(.spring(response: 0.6, dampingFraction: 0.7), value: grow)
 
                 // 열매(막대사탕) — 보상 공개 시 가지에 등장
                 fruitCluster(top: stemTop, unit: w)
@@ -52,8 +52,8 @@ struct SeedlingView: View {
     }
 
     private var bloomScale: CGFloat {
-        guard g > 0.65 else { return 0 }
-        return 0.6 + 0.4 * min(1, (g - 0.65) / 0.35)
+        let p = (grow - 0.65) / 0.35   // 애니메이션 진행도(grow)에 연동
+        return p <= 0 ? 0 : 0.6 + 0.4 * min(1, p)
     }
 
     // 화분
@@ -61,8 +61,8 @@ struct SeedlingView: View {
         PotShape()
             .fill(Theme.clay)
             .overlay(PotShape().stroke(.black.opacity(0.08), lineWidth: 2))
-            .frame(width: w * 0.42, height: h * 0.22)
-            .position(x: w * 0.5, y: h * 0.90)
+            .frame(width: w * 0.42, height: h * 0.20)
+            .position(x: w * 0.5, y: h * 0.85)
             .shadow(color: .black.opacity(0.08), radius: 4, x: 1, y: 3)
     }
 
@@ -100,7 +100,7 @@ struct SeedlingView: View {
     private func fruitCluster(top: CGPoint, unit: CGFloat) -> some View {
         let r = unit * 0.085
         return ZStack {
-            ForEach(0..<max(0, fruits), id: \.self) { i in
+            ForEach(0..<min(max(fruits, 0), 2), id: \.self) { i in
                 let dx = (i == 0 ? -1.0 : 1.0) * unit * 0.16
                 VStack(spacing: 0) {
                     Circle().fill(Theme.clay)
@@ -123,7 +123,7 @@ private struct StemShape: Shape {
     func path(in r: CGRect) -> Path {
         var p = Path()
         let bottom = CGPoint(x: r.midX, y: r.maxY * 0.80)
-        let top = CGPoint(x: r.midX - r.width * 0.06, y: r.minY + r.height * 0.10)
+        let top = CGPoint(x: r.midX - r.width * 0.06, y: r.minY + r.height * 0.16)
         let c1 = CGPoint(x: r.midX + r.width * 0.18, y: r.midY)
         let c2 = CGPoint(x: r.midX - r.width * 0.22, y: r.minY + r.height * 0.32)
         p.move(to: bottom)
