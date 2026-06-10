@@ -19,6 +19,7 @@ struct AttractView: View {
                 .font(Theme.display(104))
                 .foregroundStyle(Theme.ink)
                 .multilineTextAlignment(.center)
+                .lineSpacing(10)
             Text(model.subtitle)
                 .font(Theme.body(34))
                 .foregroundStyle(Theme.inkSoft)
@@ -69,7 +70,7 @@ struct ProcessingView: View {
             .animation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true), value: float)
 
             Text(model.title).font(Theme.title(46)).foregroundStyle(Theme.ink)
-                .multilineTextAlignment(.center)
+                .multilineTextAlignment(.center).lineSpacing(6)
             // AI 설명(재활용 팁) — 인식 후 사진과 함께 표시
             if let tip = app.tip, !tip.isEmpty {
                 TipBox(text: tip).padding(.horizontal, 32)
@@ -91,9 +92,9 @@ struct StatusView: View {
             Spacer()
             Image(systemName: symbol).font(.system(size: 110)).foregroundStyle(accent)
             Text(model.title).font(Theme.title(54)).foregroundStyle(Theme.ink)
-                .multilineTextAlignment(.center)
+                .multilineTextAlignment(.center).lineSpacing(6)
             Text(model.subtitle).font(Theme.body(26)).foregroundStyle(Theme.inkSoft)
-                .multilineTextAlignment(.center)
+                .multilineTextAlignment(.center).lineSpacing(4)
             Spacer()
         }
         .padding(48)

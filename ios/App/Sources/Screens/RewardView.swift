@@ -23,19 +23,20 @@ struct RewardView: View {
             StepperView(current: .sort, compact: true)  // 여정 완료
                 .padding(.top, 10).padding(.horizontal, 60)
 
-            HStack(alignment: .center, spacing: 36) {
+            HStack(alignment: .center, spacing: 28) {
                 leftColumn
                 ecoCard
             }
-            .padding(.horizontal, 28)
+            .padding(.horizontal, 24)
 
             Spacer(minLength: 0)
 
-            if showResetHint {
-                Text("곧 처음 화면으로 돌아가요")
-                    .font(Theme.caption(20)).foregroundStyle(Theme.inkSoft)
-                    .padding(.bottom, 10).transition(.opacity)
-            }
+            // 리셋 임박 힌트 — 고정 슬롯(항상 자리 차지, 불투명도만 토글)으로 레이아웃 흔들림/클리핑 방지.
+            Text("곧 처음 화면으로 돌아가요")
+                .font(Theme.caption(20)).foregroundStyle(Theme.inkSoft)
+                .opacity(showResetHint ? 1 : 0)
+                .padding(.bottom, 10)
+                .animation(.easeIn(duration: 0.3), value: showResetHint)
         }
         .padding(.vertical, 22)
         .onAppear {
@@ -68,7 +69,7 @@ struct RewardView: View {
                 TipBox(text: tip)
             }
         }
-        .frame(maxWidth: 440, alignment: .leading)
+        .frame(maxWidth: 400, alignment: .leading)
     }
 
     // MARK: 우측 — 에코포인트 링 + 탄소절감 + 보상 리빌
@@ -107,14 +108,15 @@ struct RewardView: View {
             rewardReveal
         }
         .padding(26)
-        .frame(maxWidth: 480)
+        .frame(maxWidth: 440)
         .background(.white.opacity(0.5), in: RoundedRectangle(cornerRadius: 32))
     }
 
+    // 카피는 lollipops가 아니라 recyclable로 분기(재활용 가능하나 0점인 경우 오표기 방지, trash-iwg).
     private var ecoHeadline: String {
-        reward.lollipops > 0
-            ? "탄소절감에 기여했어요! 막대사탕을 받아 가세요"
-            : "재활용이 어려운 쓰레기라 에코포인트가 없어요"
+        if reward.lollipops > 0 { return "탄소절감에 기여했어요! 막대사탕을 받아 가세요" }
+        if reward.recyclable { return "재활용 가능한 자원이에요! 분리배출 고마워요" }
+        return "재활용이 어려운 쓰레기예요"
     }
 
     // 소나무 1그루 흡수 환산(체감 비유). 48시간↑은 '일'로 표기.
@@ -128,8 +130,10 @@ struct RewardView: View {
     @ViewBuilder private var rewardReveal: some View {
         if reward.lollipops == 0 {
             VStack(spacing: 12) {
-                Text("🗑️").font(.system(size: 56))
-                Text("재활용 가능한 쓰레기를 넣으면\n막대사탕을 받을 수 있어요")
+                Text(reward.recyclable ? "♻️" : "🗑️").font(.system(size: 56))
+                Text(reward.recyclable
+                     ? "분리배출 해주셔서 고마워요!"
+                     : "재활용 가능한 쓰레기를 넣으면\n막대사탕을 받을 수 있어요")
                     .font(Theme.body(20)).foregroundStyle(Theme.inkSoft)
                     .multilineTextAlignment(.center)
             }
@@ -184,8 +188,8 @@ struct RewardView: View {
             // 2) 연출 유지(당첨은 더 길게 — 사탕 수령 시간)
             try? await Task.sleep(nanoseconds: won ? 6_500_000_000 : 3_500_000_000)
             if Task.isCancelled { return }
-            // 3) 리셋 임박 힌트(사진 촬영 보호) 후 복귀
-            withAnimation(.easeIn(duration: 0.3)) { showResetHint = true }
+            // 3) 리셋 임박 힌트(사진 촬영 보호) 후 복귀 — 애니메이션은 뷰의 .animation이 담당
+            showResetHint = true
             try? await Task.sleep(nanoseconds: 2_000_000_000)
             if Task.isCancelled { return }
             app.finishReward()
@@ -218,9 +222,9 @@ private struct SparkleBurst: View {
         ZStack {
             ForEach(0..<count, id: \.self) { i in
                 let angle = Double(i) / Double(count) * 2 * .pi
-                let mag: CGFloat = 120 + CGFloat(i % 4) * 30
+                let mag: CGFloat = 78 + CGFloat(i % 4) * 16   // 버스트 반경 축소(프레임 밖 과도 렌더 방지)
                 Text(symbols[i % symbols.count])
-                    .font(.system(size: 24 + CGFloat(i % 3) * 8))
+                    .font(.system(size: 22 + CGFloat(i % 3) * 6))
                     .offset(x: go ? cos(angle) * mag : 0, y: go ? sin(angle) * mag : 0)
                     .opacity(go ? 0 : 1)
                     .scaleEffect(go ? 0.4 : 1)

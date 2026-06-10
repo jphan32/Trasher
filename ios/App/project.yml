@@ -15,16 +15,28 @@ targets:
     platform: iOS
     sources:
       - Sources
+      - Resources           # 번들 폰트(Pretendard, OFL) 등 리소스
     dependencies:
       - package: TrasherCore
+    # 명시 Info.plist(XcodeGen 생성) — UIAppFonts(폰트 배열)는 INFOPLIST_KEY로 못 넣어서 필요.
+    info:
+      path: GeneratedInfo.plist
+      properties:
+        UILaunchScreen: {}
+        UIRequiresFullScreen: true
+        UIStatusBarHidden: true
+        NSBluetoothAlwaysUsageDescription: "분류기와 BLE로 통신합니다"
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UIAppFonts:
+          - Pretendard-Black.otf
+          - Pretendard-Bold.otf
+          - Pretendard-SemiBold.otf
+          - Pretendard-Medium.otf
     settings:
       base:
         TARGETED_DEVICE_FAMILY: 2        # iPad
         DEVELOPMENT_TEAM: VNLYBFXMUP      # Sangjoon Han (jphan32@me.com 개인팀) — 디바이스 서명
         CODE_SIGN_STYLE: Automatic
         SWIFT_VERSION: "6.0"
-        GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription: "분류기와 BLE로 통신합니다"
-        INFOPLIST_KEY_UIRequiresFullScreen: YES
-        INFOPLIST_KEY_UIStatusBarHidden: YES
-        INFOPLIST_KEY_UISupportedInterfaceOrientations__ipad__: "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"

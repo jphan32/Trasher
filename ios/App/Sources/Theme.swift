@@ -21,7 +21,7 @@ enum Theme {
     static let ink = Color(hex: 0x1F2421)     // 딥 포레스트-차콜(본문, 15.1:1)
     static let inkSoft = Color(hex: 0x566259) // 세이지(보조 텍스트, 5.8:1)
     static let sprout = Color(hex: 0x2A5A3B)  // 포레스트 그린(주 에코 액센트, 7.2:1; 흰 텍스트 8.1:1)
-    static let clay = Color(hex: 0xD76F38)    // 테라코타(에너지/보상 액센트)
+    static let clay = Color(hex: 0xC25A28)    // 테라코타(에너지/보상 액센트). 텍스트/버튼 모두 흰색 대비 4.4:1
 
     // 카테고리 색 — 환경부 규약(클리어PET=황색 / 캔=회색) + 흰 텍스트 대비≥4:1 보장.
     static let petGold = Color(hex: 0xAC7300)   // 페트=황색 계열(흰 텍스트 4.06:1)
@@ -36,11 +36,13 @@ enum Theme {
         }
     }
 
-    // 타이포 스케일(대형 한글, system black/rounded — 추후 Pretendard 번들 가능)
-    static func display(_ size: CGFloat = 96) -> Font { .system(size: size, weight: .black, design: .rounded) }
-    static func title(_ size: CGFloat = 56) -> Font { .system(size: size, weight: .heavy, design: .rounded) }
-    static func body(_ size: CGFloat = 28) -> Font { .system(size: size, weight: .semibold, design: .rounded) }
-    static func caption(_ size: CGFloat = 20) -> Font { .system(size: size, weight: .medium, design: .rounded) }
+    // 타이포 — Pretendard 번들(OFL, trash-7kb). SF Rounded는 한글 글리프가 없어 SD Gothic Neo로
+    // 폴백돼 영문/한글이 불일치했다. Pretendard로 통일해 키오스크 한글 가독성을 높인다.
+    // (등록 실패 시 .custom은 시스템 폰트로 안전 폴백 — 크래시 없음.)
+    static func display(_ size: CGFloat = 96) -> Font { .custom("Pretendard-Black", size: size) }
+    static func title(_ size: CGFloat = 56) -> Font { .custom("Pretendard-Bold", size: size) }
+    static func body(_ size: CGFloat = 28) -> Font { .custom("Pretendard-SemiBold", size: size) }
+    static func caption(_ size: CGFloat = 20) -> Font { .custom("Pretendard-Medium", size: size) }
 }
 
 /// 종이 질감 배경 + 부드러운 비네팅.

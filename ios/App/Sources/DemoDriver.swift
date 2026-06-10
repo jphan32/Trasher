@@ -83,8 +83,9 @@ final class DemoDriver: PeripheralLink {
             let category = pendingCategory                   // 분류 결과대로 sort(카테고리=팁 일치)
             emit(.sorting, lastSort: category); await sleep(1.3)
             emit(.idle, lastSort: category)                  // reward 진입
-            await sleep(4.5)                                 // 결과/보상 표시(에코포인트+사탕 이펙트)
-            coordinator?.rewardFinished()
+            // 보상 자동복귀는 RewardView.startAutoSequence가 소유(실/데모 일관, 당첨~11s/미당첨~8s).
+            // 데모는 최대 시퀀스보다 길게 대기해 끊김 없이 다음 사이클로 넘어간다(trash-iwg).
+            await sleep(12.0)
         }
     }
 

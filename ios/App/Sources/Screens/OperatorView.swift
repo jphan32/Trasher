@@ -63,8 +63,10 @@ struct OperatorView: View {
     }
 
     private func statCard(_ label: String, _ count: Int, _ color: Color) -> some View {
-        VStack(spacing: 4) {
-            Text("\(count)").font(Theme.title(34)).foregroundStyle(color)
+        // 다크 카드 위에서는 카테고리 색을 텍스트로 쓰면 저대비 → 색은 액센트 바, 숫자는 흰색(trash-iwg).
+        VStack(spacing: 6) {
+            Capsule().fill(color).frame(width: 30, height: 5)
+            Text("\(count)").font(Theme.title(34)).foregroundStyle(.white)
             Text(label).font(Theme.caption(18)).foregroundStyle(.white.opacity(0.7))
         }
         .frame(minWidth: 76).padding(.vertical, 12)
