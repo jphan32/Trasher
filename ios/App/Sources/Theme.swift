@@ -14,24 +14,25 @@ extension Color {
 }
 
 enum Theme {
-    // 팔레트
-    static let paper = Color(hex: 0xF2ECDD)   // 따뜻한 크림(흙빛)
-    static let paperDeep = Color(hex: 0xE7DEC8)
-    static let ink = Color(hex: 0x1B2A1F)     // 딥 포레스트
-    static let inkSoft = Color(hex: 0x4A5A4C)
-    static let sprout = Color(hex: 0x6FBF3F)  // 새싹(주 액센트)
-    static let clay = Color(hex: 0xE07A3F)    // 클레이(에너지 액센트)
+    // 팔레트 — WCAG 정비 + 한국 환경부 분리배출 색 규약 정렬(M4, trash-79k/q52).
+    // 대비율은 paper 기준(키오스크 1~2m·조명 변화 대응). 출처: 환경부 분리배출 지침, WCAG 2.2.
+    static let paper = Color(hex: 0xF5F2EB)   // 따뜻한 크림(흙빛) 베이스
+    static let paperDeep = Color(hex: 0xE6DEC9) // 카드/보더/비네팅
+    static let ink = Color(hex: 0x1F2421)     // 딥 포레스트-차콜(본문, 15.1:1)
+    static let inkSoft = Color(hex: 0x566259) // 세이지(보조 텍스트, 5.8:1)
+    static let sprout = Color(hex: 0x2A5A3B)  // 포레스트 그린(주 에코 액센트, 7.2:1; 흰 텍스트 8.1:1)
+    static let clay = Color(hex: 0xD76F38)    // 테라코타(에너지/보상 액센트)
 
-    // 카테고리 색
-    static let petBlue = Color(hex: 0x2D9CDB)
-    static let canAmber = Color(hex: 0xE0A92F)
-    static let otherStone = Color(hex: 0x8A8170)
+    // 카테고리 색 — 환경부 규약(클리어PET=황색 / 캔=회색) + 흰 텍스트 대비≥4:1 보장.
+    static let petGold = Color(hex: 0xAC7300)   // 페트=황색 계열(흰 텍스트 4.06:1)
+    static let canSlate = Color(hex: 0x4F5D65)  // 캔=회색 계열(흰 텍스트 6.77:1)
+    static let otherBark = Color(hex: 0x8E5E50) // 기타=바크 브라운(흰 텍스트 5.4:1)
 
     static func category(_ c: WasteCategory) -> Color {
         switch c {
-        case .pet: return petBlue
-        case .can: return canAmber
-        case .other: return otherStone
+        case .pet: return petGold
+        case .can: return canSlate
+        case .other: return otherBark
         }
     }
 

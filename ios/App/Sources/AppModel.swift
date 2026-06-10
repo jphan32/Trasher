@@ -94,7 +94,10 @@ final class AppModel: ObservableObject {
     }
 
     // 보상 수령 완료 → 어트랙트 복귀 + 감지 재개(§2.1)
+    // 무터치 자동복귀 레이스 가드: reward 화면일 때만 동작. RewardView의 ~8초 자동
+    // 타이머가 BLE 끊김/오류/점검 전이와 경합해도 실제 상태를 덮어쓰지 않게 한다(trash-77t).
     func finishReward() {
+        guard model.screen == .reward else { return }
         ecoReward = nil
         coordinator.rewardFinished()
     }

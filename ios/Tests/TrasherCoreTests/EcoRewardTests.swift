@@ -69,4 +69,10 @@ final class EcoRewardTests: XCTestCase {
         XCTAssertEqual(EcoReward(ecoPoints: 80, recyclable: false).co2Grams, 0)
         XCTAssertEqual(EcoReward(ecoPoints: 0, recyclable: true).co2Grams, 0)
     }
+
+    func testTreeHoursEstimate() {
+        // 소나무 환산(체감 비유): 60점 → 120g → 120/0.75 = 160시간.
+        XCTAssertEqual(EcoReward(ecoPoints: 60, recyclable: true).treeHours, 160)
+        XCTAssertEqual(EcoReward(ecoPoints: 0, recyclable: true).treeHours, 0)
+    }
 }

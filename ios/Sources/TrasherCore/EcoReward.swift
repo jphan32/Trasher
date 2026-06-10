@@ -21,6 +21,12 @@ public struct EcoReward: Equatable, Sendable {
     /// 표시용 CO₂ 절감량(g) 추정치. 비재활용/0점은 0g(ecoPoints가 이미 정규화됨).
     public var co2Grams: Int { Int((Double(ecoPoints) * Self.gramsCO2PerPoint).rounded()) }
 
+    /// 30년 된 소나무 1그루의 CO₂ 흡수율(국립산림과학원 기준 약 18g/day ≈ 0.75g/h). 체감 비유용.
+    public static let treeGramsPerHour = 0.75
+
+    /// 절감 CO₂를 '소나무 1그루 흡수 시간'으로 환산(표시·체감용). docs §4.6.
+    public var treeHours: Int { Int((Double(co2Grams) / Self.treeGramsPerHour).rounded()) }
+
     /// eco_points/recyclable로부터 보상을 결정적으로 산출.
     /// - 재활용 불가 또는 0점 → 0개
     /// - 0 < 점수 < 임계값 → 1개

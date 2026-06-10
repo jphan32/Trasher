@@ -40,9 +40,9 @@ struct OperatorView: View {
                 Text("상태: \(app.model.title)").font(Theme.body(24)).foregroundStyle(.white.opacity(0.85))
             }
             HStack(spacing: 14) {
-                statCard("페트", app.stats.count(.pet), Theme.petBlue)
-                statCard("캔", app.stats.count(.can), Theme.canAmber)
-                statCard("기타", app.stats.count(.other), Theme.otherStone)
+                statCard("페트", app.stats.count(.pet), Theme.petGold)
+                statCard("캔", app.stats.count(.can), Theme.canSlate)
+                statCard("기타", app.stats.count(.other), Theme.otherBark)
                 statCard("합계", app.stats.total, Theme.sprout)
                 Spacer()
                 Button("통계 리셋") { app.resetStats() }
@@ -56,7 +56,7 @@ struct OperatorView: View {
     private var statusColor: Color {
         switch app.model.screen {
         case .attract, .reward: return Theme.sprout
-        case .processing: return Theme.canAmber
+        case .processing: return Theme.canSlate
         case .error, .stalled: return Theme.clay
         default: return .white.opacity(0.4)
         }
