@@ -129,6 +129,23 @@ libcamera-hello --list-cameras      # 카메라 목록
 rpicam-still -o /tmp/test.jpg        # 테스트 촬영(Bookworm 명령명: rpicam-*)
 ```
 
+### 5.1 모션 감지 튜닝 (`--tune`)
+
+투입 검출 임계값(`TRASH_MOTION_THRESH`, 기본 0.02)을 현장 카메라/조명에 맞춘다. **동일 해상도
+프레임 시퀀스**가 필요하다(서로 다른 크기 이미지는 `changed_ratio`가 0.0 — 정상 방어동작).
+
+```bash
+# 1) 투입 장면을 연속 프레임으로 저장(.npy 동일크기 또는 동일해상도 .jpg). 예: 카메라 캡처 스크립트로
+#    빈 벨트 → 물체 투입 → 이동을 6~20프레임 캡처해 한 디렉터리에 모은다.
+# 2) 분석:
+uv run trash-sorter --tune <frames_dir> [--threshold 0.02] [--pixel-delta 25]
+#    출력: 프레임별 변화비율/모션여부 + suggested_threshold
+# 3) 제안값을 env에 반영: /etc/trash-sorter.env 에 TRASH_MOTION_THRESH=<suggested>
+```
+
+> `suggested_threshold`는 모션 프레임 비율의 기하평균 근사다. 오검출이 많으면 값을 올리고,
+> 투입을 놓치면 내린다. `TRASH_SETTLE_SEC`(기본 0.5)는 촬영 전 안정화 대기.
+
 ---
 
 ## 6. 서보 PWM 안정화 (pigpio)
