@@ -75,20 +75,14 @@ struct RewardView: View {
     // MARK: 우측 — 에코포인트 링 + 탄소절감 + 보상 리빌
     private var ecoCard: some View {
         VStack(spacing: 16) {
-            ZStack {
-                Circle().stroke(Theme.paperDeep, lineWidth: 13)
-                Circle()
-                    .trim(from: 0, to: stamp ? CGFloat(reward.ecoPoints) / 100 : 0)
-                    .stroke(ringColor, style: StrokeStyle(lineWidth: 13, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-                    .animation(.easeOut(duration: 1.0), value: stamp)
-                VStack(spacing: 0) {
-                    Text("🌍").font(.system(size: 28))
-                    Text("\(displayedPoints)").font(Theme.display(58)).foregroundStyle(Theme.ink)
-                    Text("에코포인트").font(Theme.caption(16)).foregroundStyle(Theme.inkSoft)
-                }
+            // 씨앗 도감(시그니처) — 에코포인트만큼 자라는 식물. 보상은 가지에 열리는 열매.
+            SeedlingView(category: category, growth: Double(reward.ecoPoints) / 100,
+                         fruits: reward.lollipops, showFruits: revealed)
+                .frame(width: 200, height: 200)
+            VStack(spacing: 0) {
+                Text("🌍 \(displayedPoints)").font(Theme.display(46)).foregroundStyle(Theme.ink)
+                Text("에코포인트").font(Theme.caption(16)).foregroundStyle(Theme.inkSoft)
             }
-            .frame(width: 188, height: 188)
 
             // 탄소절감 CO₂(에코포인트 환산, 표시 전용 근사) + 소나무 체감 비유
             if reward.ecoPoints > 0 {
@@ -129,48 +123,28 @@ struct RewardView: View {
     // MARK: 보상 리빌(무터치) — 단계적 자동 공개. 참가자 터치 없음(startAutoSequence).
     @ViewBuilder private var rewardReveal: some View {
         if reward.lollipops == 0 {
-            VStack(spacing: 12) {
-                Text(reward.recyclable ? "♻️" : "🗑️").font(.system(size: 56))
+            VStack(spacing: 10) {
+                Text(reward.recyclable ? "♻️" : "🗑️").font(.system(size: 48))
                 Text(reward.recyclable
                      ? "분리배출 해주셔서 고마워요!"
                      : "재활용 가능한 쓰레기를 넣으면\n막대사탕을 받을 수 있어요")
                     .font(Theme.body(20)).foregroundStyle(Theme.inkSoft)
                     .multilineTextAlignment(.center)
             }
+            .frame(height: 86)
             .transition(.opacity)
-        } else if !revealed {
-            // 자동 공개 대기 — 선물 상자(터치 불필요, 곧 자동으로 열림)
-            Text("🎁").font(.system(size: 76))
-                .scaleEffect(stamp ? 1 : 0.6)
-                .transition(.opacity)
         } else {
-            VStack(spacing: 14) {
-                lollipopBurst
-                Text("막대사탕 \(reward.lollipops)개 당첨!")
-                    .font(Theme.title(36)).foregroundStyle(Theme.clay)
+            // 당첨 — 막대사탕은 식물 가지에 열매로 열림(SeedlingView). 여기선 축하 텍스트+스파클.
+            // 고정 높이 슬롯으로 공개 전후 레이아웃 흔들림 방지.
+            ZStack {
+                if revealed { SparkleBurst() }
+                Text(revealed ? "막대사탕 \(reward.lollipops)개 당첨!" : " ")
+                    .font(Theme.title(34)).foregroundStyle(Theme.clay)
+                    .scaleEffect(revealed ? 1 : 0.6)
+                    .animation(.spring(response: 0.5, dampingFraction: 0.6), value: revealed)
             }
-            .transition(.scale(scale: 0.85).combined(with: .opacity))
+            .frame(height: 86)
         }
-    }
-
-    // MARK: 사탕 당첨 이펙트(스프링 등장 + 스파클)
-    private var lollipopBurst: some View {
-        ZStack {
-            SparkleBurst()
-            HStack(spacing: 18) {
-                ForEach(0..<reward.lollipops, id: \.self) { i in
-                    Text("🍭")
-                        .font(.system(size: 92))
-                        .rotationEffect(.degrees(revealed ? (i == 0 ? -10 : 10) : -45))
-                        .scaleEffect(revealed ? 1 : 0.2)
-                        .animation(
-                            .spring(response: 0.55, dampingFraction: 0.5).delay(Double(i) * 0.18),
-                            value: revealed
-                        )
-                }
-            }
-        }
-        .frame(height: 128)
     }
 
     // 무터치 단계적 자동 시퀀스(NNg 키오스크 페이싱): 점수 인지 → 사탕 공개 → 리셋 힌트 → 복귀.
