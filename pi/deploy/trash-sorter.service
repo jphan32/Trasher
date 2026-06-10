@@ -7,6 +7,8 @@ Requires=bluetooth.service
 
 [Service]
 Type=simple
+# User/Group은 install.sh가 실제 실행 사용자($SUDO_USER, 예: jphan32)로 치환한다.
+# 'pi'는 플레이스홀더 — 직접 설치 시 현장 사용자로 바꿀 것('pi' 미존재 시 기동 실패).
 User=pi
 Group=pi
 WorkingDirectory=/opt/trash-sorter
