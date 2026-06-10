@@ -20,6 +20,8 @@ targets:
     settings:
       base:
         TARGETED_DEVICE_FAMILY: 2        # iPad
+        DEVELOPMENT_TEAM: VNLYBFXMUP      # Sangjoon Han (jphan32@me.com 개인팀) — 디바이스 서명
+        CODE_SIGN_STYLE: Automatic
         SWIFT_VERSION: "6.0"
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription: "분류기와 BLE로 통신합니다"

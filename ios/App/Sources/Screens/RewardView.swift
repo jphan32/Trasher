@@ -10,6 +10,7 @@ struct RewardView: View {
     @State private var revealed = false
     @State private var displayedPoints = 0
     @State private var countTask: Task<Void, Never>?
+    @State private var autoTask: Task<Void, Never>?   // 무터치 자동 진행(리빌+복귀)
 
     private var category: WasteCategory { model.category ?? .other }
     private var reward: EcoReward { app.ecoReward ?? .none }
@@ -34,8 +35,9 @@ struct RewardView: View {
         .onAppear {
             stamp = true
             startCountUp(to: reward.ecoPoints)
+            startAutoSequence()   // 참가자 무터치: 자동 사탕 공개 + 자동 어트랙트 복귀
         }
-        .onDisappear { countTask?.cancel() }
+        .onDisappear { countTask?.cancel(); autoTask?.cancel() }
     }
 
     // MARK: 결과 헤더(사진 + 카테고리 배지)
@@ -78,6 +80,14 @@ struct RewardView: View {
             }
             .frame(width: 210, height: 210)
 
+            // 탄소절감 CO₂ 추정 병기(에코포인트 환산, 표시 전용 근사)
+            if reward.ecoPoints > 0 {
+                VStack(spacing: 2) {
+                    Text("탄소절감 약").font(Theme.caption(18)).foregroundStyle(Theme.inkSoft)
+                    Text("\(reward.co2Grams)g CO₂").font(Theme.title(34)).foregroundStyle(ringColor)
+                }
+            }
+
             Text(ecoHeadline)
                 .font(Theme.body(24)).foregroundStyle(Theme.inkSoft)
                 .multilineTextAlignment(.center)
@@ -95,7 +105,7 @@ struct RewardView: View {
             : "재활용이 어려운 쓰레기라 에코포인트가 없어요"
     }
 
-    // MARK: 보상 리빌(사탕 0개 안내 / 받기 버튼 / 당첨 이펙트)
+    // MARK: 보상 리빌(무터치) — 자동 공개/복귀. 참가자 터치 없음(startAutoSequence).
     @ViewBuilder private var rewardReveal: some View {
         if reward.lollipops == 0 {
             VStack(spacing: 14) {
@@ -103,23 +113,18 @@ struct RewardView: View {
                 Text("재활용 가능한 쓰레기를 넣으면\n막대사탕을 받을 수 있어요")
                     .font(Theme.body(22)).foregroundStyle(Theme.inkSoft)
                     .multilineTextAlignment(.center)
-                finishButton(title: "확인", color: Theme.inkSoft)
             }
             .transition(.opacity)
         } else if !revealed {
-            Button(action: { withAnimation(.spring(response: 0.5, dampingFraction: 0.6)) { revealed = true } }) {
-                Text("막대사탕 받기 🎁")
-                    .font(Theme.title(40)).foregroundStyle(.white)
-                    .padding(.horizontal, 60).padding(.vertical, 24)
-                    .background(Theme.clay, in: Capsule())
-            }
-            .padding(.top, 4)
+            // 자동 공개 대기 — 선물 상자(터치 불필요, 곧 자동으로 열림)
+            Text("🎁").font(.system(size: 88))
+                .scaleEffect(stamp ? 1 : 0.6)
+                .transition(.opacity)
         } else {
             VStack(spacing: 18) {
                 lollipopBurst
                 Text("막대사탕 \(reward.lollipops)개 당첨!")
                     .font(Theme.title(40)).foregroundStyle(Theme.clay)
-                finishButton(title: "다 받았어요", color: Theme.ink)
             }
             .transition(.scale(scale: 0.85).combined(with: .opacity))
         }
@@ -145,14 +150,22 @@ struct RewardView: View {
         .frame(height: 150)
     }
 
-    private func finishButton(title: String, color: Color) -> some View {
-        Button(action: { app.finishReward() }) {
-            Text(title)
-                .font(Theme.body(28)).foregroundStyle(.white)
-                .padding(.horizontal, 52).padding(.vertical, 20)
-                .background(color, in: Capsule())
+    // 무터치 자동 시퀀스: 카운트업 후 사탕 자동 공개 → 총 ~8초 시점에 자동 어트랙트 복귀.
+    // 참가자는 일절 터치하지 않는다(요구사항). 운영자 개입은 RootView 숨김 제스처로만.
+    private func startAutoSequence() {
+        autoTask?.cancel()
+        autoTask = Task { @MainActor in
+            // 1) 에코포인트 카운트업(~1.5s) 후 사탕 자동 공개
+            try? await Task.sleep(nanoseconds: 1_900_000_000)
+            if Task.isCancelled { return }
+            if reward.lollipops > 0 {
+                withAnimation(.spring(response: 0.5, dampingFraction: 0.6)) { revealed = true }
+            }
+            // 2) 당첨 연출 유지 후 총 ~8초 시점에 자동 복귀(어트랙트 + 감지 재개, §2.1)
+            try? await Task.sleep(nanoseconds: 6_100_000_000)
+            if Task.isCancelled { return }
+            app.finishReward()
         }
-        .padding(.top, 6)
     }
 
     // 에코포인트 카운트업 애니메이션(0 → 목표).

@@ -57,4 +57,16 @@ final class EcoRewardTests: XCTestCase {
         XCTAssertEqual(EcoReward(ecoPoints: 150, recyclable: true).ecoPoints, 100)
         XCTAssertEqual(EcoReward(ecoPoints: 150, recyclable: true).lollipops, 2)
     }
+
+    func testCO2GramsEstimate() {
+        // 탄소절감 CO₂ 추정(표시 전용) — 60점 ≈ 120g(2g/점).
+        XCTAssertEqual(EcoReward(ecoPoints: 60, recyclable: true).co2Grams, 120)
+        XCTAssertEqual(EcoReward(ecoPoints: 100, recyclable: true).co2Grams, 200)
+    }
+
+    func testCO2GramsZeroWhenNoReward() {
+        // 비재활용/0점은 점수가 0으로 정규화되므로 CO₂도 0g.
+        XCTAssertEqual(EcoReward(ecoPoints: 80, recyclable: false).co2Grams, 0)
+        XCTAssertEqual(EcoReward(ecoPoints: 0, recyclable: true).co2Grams, 0)
+    }
 }

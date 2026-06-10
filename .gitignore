@@ -11,6 +11,8 @@ DerivedData/
 # xcodegen 생성물(project.yml이 진실) + 빌드 산출물
 *.xcodeproj/
 .build-xcode/
+.build-device/
+.build-mac/
 
 # Python (pi/)
 .venv/

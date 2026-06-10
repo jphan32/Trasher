@@ -14,6 +14,13 @@ public struct EcoReward: Equatable, Sendable {
     /// 에코포인트 상한(Pi schema와 동일). 표시·링 게이지가 100% 넘지 않게 클램프.
     public static let maxPoints = 100
 
+    /// eco_points → CO₂ 절감량(g) 추정 환산계수(표시 전용 근사). 60점 ≈ 120g(2g/점).
+    /// 실측이 아니라 참가자 체감용 근사치다. docs §4.6.
+    public static let gramsCO2PerPoint = 2.0
+
+    /// 표시용 CO₂ 절감량(g) 추정치. 비재활용/0점은 0g(ecoPoints가 이미 정규화됨).
+    public var co2Grams: Int { Int((Double(ecoPoints) * Self.gramsCO2PerPoint).rounded()) }
+
     /// eco_points/recyclable로부터 보상을 결정적으로 산출.
     /// - 재활용 불가 또는 0점 → 0개
     /// - 0 < 점수 < 임계값 → 1개
