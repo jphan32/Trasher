@@ -30,7 +30,9 @@ cd "$APP_DIR"
 # venv는 apt와 같은 시스템 Python 3.13 + system-site로 만들어 apt picamera2/libcamera를 import.
 # (pyenv 등 다른 Python·system-site 미설정 시 import libcamera 실패 — docs/pi-setup.md §4/§10)
 uv venv --python /usr/bin/python3 --system-site-packages
-uv sync                                   # system-site 설정 보존됨
+# --inexact: requirements-pi.txt로 설치한 하드웨어 의존(gpiozero/opencv)을 prune하지 않게.
+# (bare `uv sync`는 락파일에 없는 패키지를 제거 → 런타임 깨짐. 재실행 안전성 확보.)
+uv sync --inexact                         # system-site 설정 보존 + extras 유지
 uv pip install -r requirements-pi.txt     # gpiozero/bless/opencv (picamera2/libcamera는 apt+system-site)
 
 echo "[3/5] 환경파일 설치(없을 때만): $ENV_DST"

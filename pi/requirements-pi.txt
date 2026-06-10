@@ -4,8 +4,11 @@
 #
 # Pi에서 설치(venv = 시스템 Python 3.13 + --system-site-packages, docs/pi-setup.md §10):
 #   uv venv --python /usr/bin/python3 --system-site-packages
-#   uv sync                                # 크로스플랫폼 + dev 도구 (system-site 보존됨)
+#   uv sync --inexact                      # 크로스플랫폼 + dev 도구 (system-site 보존됨)
 #   uv pip install -r requirements-pi.txt  # 아래 하드웨어 의존성
+#
+# ⚠️ bare `uv sync`는 락파일에 없는 이 패키지들을 prune(제거)해 런타임을 깬다.
+#    반드시 `uv sync --inexact`를 쓰거나, uv sync 후 이 파일을 재설치할 것.
 #
 # picamera2 / libcamera 는 여기에 두지 않는다 — apt(python3-picamera2, python3-libcamera)로
 # 설치하고 --system-site-packages 로 import 한다. 이유: libcamera Python 바인딩은 PyPI에 없고,

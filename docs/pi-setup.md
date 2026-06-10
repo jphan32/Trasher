@@ -214,8 +214,9 @@ cd pi
 # venv는 apt와 같은 시스템 Python 3.13으로 만들고 system-site로 apt picamera2/libcamera를 본다.
 # (--system-site-packages 없이는 import libcamera 실패. pyenv 등 다른 Python도 ABI 불일치로 불가)
 uv venv --python /usr/bin/python3 --system-site-packages
-uv sync                                   # 크로스플랫폼 + dev 도구 (system-site 설정 보존됨)
+uv sync --inexact                         # 크로스플랫폼 + dev 도구 (system-site 보존, extras 유지)
 uv pip install -r requirements-pi.txt     # gpiozero/bless/opencv (picamera2/libcamera는 apt+system-site)
+# ⚠️ bare `uv sync`는 requirements-pi.txt 하드웨어 의존을 prune해 런타임을 깬다 → 항상 --inexact.
 
 # 카메라 바인딩 검증(실패하면 §4 python3-picamera2 누락 또는 system-site 미설정 의심)
 uv run python -c "import picamera2, libcamera; print('camera OK')"
