@@ -42,7 +42,7 @@ Raspberry Pi 물리 구성 레퍼런스. GPIO 핀은 `pi/src/trash_sorter/config
 ```
 - **연속회전 서보**(각도 유지 불가) → 저속(`speed`)으로 `travel_s` 동안 목표 방향 구동해 **기구 하드스톱**까지 보낸 뒤 신호를 끊어(detach) 정지. 최대 이동 위치는 스톱이 물리적으로 제한·유지. **각 축 개·폐 양끝 하드스톱 필수**.
 - 정지=detach라 idle 전류 ≈ 0. 동작 중 무부하 ~155mA/개, **스톨 ~830mA/개**(@5V).
-- 소프트 PWM 지터는 **pigpio**(하드웨어 타이밍) 권장 — [`pi-setup.md`](pi-setup.md) §6.
+- 서보 PWM은 gpiozero **lgpio** 기본 팩토리로 동작(Trixie엔 pigpio 데몬 없음). 연속회전+하드스톱이라 소프트 PWM 지터 영향은 미미 — [`pi-setup.md`](pi-setup.md) §6.
 
 ### 벨트 모터
 

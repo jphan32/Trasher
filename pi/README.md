@@ -55,7 +55,7 @@ uv run trash-sorter                    # 또는 uv run python -m trash_sorter
 ```
 src/trash_sorter/
   protocol.py      # GATT UUID·enum·JSON 메시지 (docs/protocol.md 동기화)
-  config.py        # GPIO핀·서보각·타이밍·임계값 (env override)
+  config.py        # GPIO핀·서보 구동(연속회전)·벨트·타이밍·임계값 (env override)
   state.py         # 상태머신 (순수 로직, 하드웨어 비의존)
   hardware/        # 서보3/벨트1: 인터페이스 + Mock/gpiozero + sort 시퀀스
   vision/          # 카메라 + 변이검출: 인터페이스 + Mock/picamera2

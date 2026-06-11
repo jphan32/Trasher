@@ -60,7 +60,7 @@
 | 분류 시 429/"credits depleted" | **Gemini 결제/쿼터 소진** | AI Studio에서 크레딧 충전 또는 다른 SA 키로 교체(`secret/gemini-api-key.json`) |
 | `Address already in use :8080` / 광고 충돌 | **orphan 프로세스**(수동 `uv run` 잔존) | `pkill -9 -f "[b]in/trash-sorter"` 후 서비스 재시작 |
 | 재배포 후 `import gpiozero/cv2` 실패 | **`uv sync`가 하드웨어 의존 prune** | `uv sync --inexact` 사용 또는 `uv pip install -r requirements-pi.txt` 재실행 |
-| 서보 지터 심함 | 소프트웨어 PWM(pigpio 미가동) | `sudo systemctl enable --now pigpiod` + env `GPIOZERO_PIN_FACTORY=pigpio` |
+| 서보 지터 / `PWMSoftwareFallback` 경고 | lgpio 소프트 PWM(Trixie 기본, pigpio 데몬 없음) | **무시 가능** — 연속회전 서보는 미세 지터 영향 없음. `GPIOZERO_PIN_FACTORY`는 설정 안 함(lgpio 자동) |
 | iPad 연결 끊김 반복 | WiFi/BLE 간섭, 절전 | `sudo iw wlan0 set power_save off`(영구화: §pi-setup §9), 라우터 채널 분리 |
 | 카메라 인식 안 됨 | 리본/오버레이 | `rpicam-hello --list-cameras` 확인, 케이블 재결합 |
 | 결과는 받는데 화면 안 바뀜 | cycle 불일치 폐기(정상 방어) 또는 BLE notify 누락 | 재투입; 지속 시 앱 재시작 |
@@ -91,7 +91,7 @@ sudo systemctl restart trash-sorter
 - [ ] 라우터 인터넷 OK, AP격리 OFF, Pi·iPad 같은 서브넷
 - [ ] `systemctl is-active trash-sorter` = active (자동기동)
 - [ ] `bluetoothctl show` = Powered: yes (rfkill 영구 해제)
-- [ ] `pigpiod` active + `GPIOZERO_PIN_FACTORY=pigpio`
+- [ ] 서보 = lgpio 기본 팩토리(Trixie — `GPIOZERO_PIN_FACTORY` 미설정, pigpio 데몬 없음)
 - [ ] `/etc/trash-sorter.env`에 Gemini 키 경로, 키 쿼터 정상
 - [ ] `rpicam-hello --list-cameras` 카메라 인식
 - [ ] 모터 외부전원 + 공통 GND (Pi 5V 직급전 금지)
