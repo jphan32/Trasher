@@ -10,16 +10,16 @@ Raspberry Pi 물리 구성 레퍼런스. GPIO 핀은 `pi/src/trash_sorter/config
 |---|---|---|
 | 1 | Raspberry Pi 4B (BLE 내장) | 제어·비전·BLE Peripheral·HTTP 사진서버 |
 | 2 | picamera2 호환 카메라(CSI) | 변이 감지 + 사진 촬영 |
-| 3 | 게이트 서보 ×1 | 투입물을 캡처 존에 정위치 홀드(닫힘) / 방출(열림) |
-| 4 | 분기 서보 ×2 (좌/우) | 경로 분기: 좌 열림=좌, 우 열림=우, 둘 다 닫힘=중앙 |
+| 3 | 게이트 서보 ×1 — **SER0043**(DF9GMS, 360° 연속회전, 9g, 4.8–6V) | 투입물 정위치 홀드(닫힘) / 방출(열림). 하드스톱+시간제어 |
+| 4 | 분기 서보 ×2 (좌/우) — **SER0043** | 경로 분기: 좌 열림=좌, 우 열림=우, 둘 다 닫힘=중앙 |
 | 5 | 벨트 모터 — Wheeltec MG310P20 + 드라이버(Hiwonder 4ch I2C SA8870C, 또는 L298N류) | 컨베이어 벨트 구동(시간 기반). 전력상 2채널만 사용 |
-| 6 | 외부 전원 — 서보 **5–6V** + 모터 **12V**(드라이버 VM, Hiwonder 5–15V) | 서보·모터 전류(Pi 5V 레일과 분리, **공통 GND 필수**) |
+| 6 | 외부 전원 — 서보 **4.8–6V**(5V ≥3A) + 모터 **12V**(드라이버 VM, Hiwonder 5–15V) | 서보·모터 전류(Pi 5V 레일과 분리, **공통 GND 필수**) |
 
 ## GPIO 핀맵 (BCM, config.py 기본값)
 
 | 신호 | BCM 핀 | 물리 핀# | config / env | 비고 |
 |---|---|---|---|---|
-| 게이트 서보 PWM | **GPIO17** | 11 | `gate_pin` / `TRASH_GATE_PIN` | gpiozero `AngularServo` |
+| 게이트 서보 PWM | **GPIO17** | 11 | `gate_pin` / `TRASH_GATE_PIN` | gpiozero `Servo`(연속회전, SER0043) |
 | 분기 서보 좌 PWM | **GPIO27** | 13 | `left_pin` / `TRASH_LEFT_PIN` | |
 | 분기 서보 우 PWM | **GPIO22** | 15 | `right_pin` / `TRASH_RIGHT_PIN` | |
 | 벨트 IN1 *(driver=gpiozero)* | **GPIO23** | 16 | `forward_pin` / `TRASH_BELT_FWD_PIN` | 모터드라이버 IN1 |
@@ -28,19 +28,21 @@ Raspberry Pi 물리 구성 레퍼런스. GPIO 핀은 `pi/src/trash_sorter/config
 | 벨트 I2C SCL *(driver=hiwonder)* | **GPIO3** | 5 | `i2c_bus` / `TRASH_BELT_I2C_BUS` | I2C1 SCL, bus `1` |
 | 로직 GND(공통) | GND | 6·9·14·20·25·30·34·39 | — | **외부 전원 GND와 공통 필수** |
 
-> 서보 각도/벨트 시간 기본값: 게이트 닫힘 0° / 열림 90°, 분기 닫힘 0° / 열림 60°, `T_belt` 3.0s.
-> (`TRASH_GATE_OPEN`, `TRASH_DIV_OPEN`, `TRASH_BELT_SECONDS` 등으로 보정.)
+> 서보(연속회전) 기본값: 저속 `speed` 0.3, 이동시간 `travel_s` 0.8s, 방향 `*_dir` ±1 — 하드스톱까지 구동 후 정지. 벨트 `T_belt` 3.0s.
+> (`TRASH_SERVO_SPEED`/`TRASH_SERVO_TRAVEL`, `TRASH_GATE_DIR`/`TRASH_LEFT_DIR`/`TRASH_RIGHT_DIR`, `TRASH_BELT_SECONDS`로 보정.)
 > 벨트 드라이버는 `TRASH_BELT_DRIVER`로 선택(`gpiozero` 현행 기본 | `hiwonder` I2C). 둘은 배타적.
 
 ## 배선
 
-### 서보 ×3 (게이트·분기 좌·분기 우)
+### 서보 ×3 (게이트·분기 좌·분기 우) — SER0043(DF9GMS, 360° 연속회전)
 ```
 서보 신호(주황) ── GPIO17 / 27 / 22
-서보 V+(빨강)   ── 5–6V 외부 전원 +    (Pi 5V로 직접 X — 전류 부족/리셋)
+서보 V+(빨강)   ── 4.8–6V 외부 전원 +    (Pi 5V로 직접 X — 전류 부족/리셋)
 서보 GND(갈색)  ── 외부 전원 GND ── Pi GND   (공통 GND 필수)
 ```
-> 서보 3개는 소프트 PWM 지터가 있어 **pigpio**(하드웨어 타이밍) 권장 — 설정은 [`pi-setup.md`](pi-setup.md) §6.
+- **연속회전 서보**(각도 유지 불가) → 저속(`speed`)으로 `travel_s` 동안 목표 방향 구동해 **기구 하드스톱**까지 보낸 뒤 신호를 끊어(detach) 정지. 최대 이동 위치는 스톱이 물리적으로 제한·유지. **각 축 개·폐 양끝 하드스톱 필수**.
+- 정지=detach라 idle 전류 ≈ 0. 동작 중 무부하 ~155mA/개, **스톨 ~830mA/개**(@5V).
+- 소프트 PWM 지터는 **pigpio**(하드웨어 타이밍) 권장 — [`pi-setup.md`](pi-setup.md) §6.
 
 ### 벨트 모터
 
@@ -77,6 +79,7 @@ CSI 리본을 Pi 카메라 포트에 연결. picamera2로 인식(실기기). 캡
 ### 전원 주의
 - 서보·모터는 Pi 5V 레일에서 직접 빼지 말 것(순간 전류로 Pi 리셋/언더볼트).
 - 외부 전원과 Pi는 **GND 공통** 연결.
+- **서보 전원(5V) 용량** — SER0043 ×3: idle≈0(detach) / 무부하 3×~155mA≈0.47A / **최악(동시 스톨) 3×~0.83A≈2.5A**. inrush 감안 **5V ≥3A(권장 4–5A)**, Pi 전용 PSU와 분리.
 
 ## 분기 매핑 (config `ROUTE_MAP`)
 
@@ -92,7 +95,7 @@ CSI 리본을 Pi 카메라 포트에 연결. picamera2로 인식(실기기). 캡
 
 1. **기구 조립**: 투입구 → 게이트(캡처 존) → 분기(좌/우/중앙) → 벨트 → 분리수거함 3구.
 2. **카메라 정렬**: 캡처 존이 프레임 중앙에 오도록 고정.
-3. **서보 각도 보정**: `TRASH_GATE_OPEN/CLOSED`, `TRASH_DIV_OPEN/CLOSED`를 실제 기구 가동범위에 맞춤.
+3. **서보(연속회전) 보정**: 양끝 **하드스톱** 설치 후 `TRASH_SERVO_SPEED`(저속)·`TRASH_SERVO_TRAVEL`(스톱 도달 시간)·`TRASH_*_DIR`(개/폐 방향 부호) 조정. 정지 시 스톱에 안착하는지 확인.
    - 수동 점검: 운영자 정비 화면(iPad)에서 `sort pet/can/other`, `belt fwd/stop`으로 개별 구동.
 4. **벨트 시간 보정**: 투입물이 분리수거함까지 이동하는 데 충분한 `TRASH_BELT_SECONDS` 설정.
 5. **비전 임계값 보정**: 캡처 프레임을 `.npy`로 저장 후
@@ -101,6 +104,6 @@ CSI 리본을 Pi 카메라 포트에 연결. picamera2로 인식(실기기). 캡
 
 ## 참고
 - **OS 설치·패키지·설정 전체 절차: [`pi-setup.md`](pi-setup.md)** (Raspberry Pi 4B 셋업 가이드)
-- 핀/각도/시간 기본값: `pi/src/trash_sorter/config.py`
+- 핀/서보/시간 기본값: `pi/src/trash_sorter/config.py`
 - 물리 시퀀스(홀드→분기→방출→벨트→복귀): `docs/protocol.md` §2.5
 - env 예시: `pi/deploy/trash-sorter.env.example`

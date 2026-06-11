@@ -16,9 +16,9 @@
 | 2 | microSD 32GB↑ (A1/A2) | OS |
 | 3 | **Pi 전용 PSU** 5V/3A USB-C 공식 | Pi 단독 급전 |
 | 4 | Pi Camera (CSI, v2/v3 또는 호환) + CSI 리본 | picamera2 |
-| 5 | 서보 ×3 (게이트1 + 분기 좌/우) | SG90/MG90 등 |
+| 5 | 서보 ×3 (게이트1 + 분기 좌/우) | **SER0043**(DF9GMS, 360° 연속회전, 4.8–6V) — 양끝 하드스톱 필요 |
 | 6 | 벨트 모터 Wheeltec **MG310P20** ×2 + **드라이버**(Hiwonder 4ch I2C SA8870C, 또는 L298N류) | 컨베이어. 전력상 2채널 |
-| 7 | **서보·모터 전용 전원** — 서보 5–6V / 모터 12V(드라이버 VM, Hiwonder 5–15V) | Pi 5V 레일과 분리 |
+| 7 | **서보·모터 전용 전원** — 서보 4.8–6V(SER0043×3 → 5V ≥3A) / 모터 12V(드라이버 VM, Hiwonder 5–15V) | Pi 5V 레일과 분리 |
 | 8 | 점퍼선, 공통 GND 배선 | |
 
 ⚠️ **서보·모터는 Pi 5V 레일에서 직접 급전하지 말 것** — 순간 전류로 Pi 언더볼트/리셋. 외부 전원 사용 + **Pi와 GND 공통**.
@@ -44,7 +44,7 @@
                                               IN2=GPIO24 ── DC 모터(벨트)
         │              │              │            │
         └──────────────┴──────┬───────┴────────────┘
-                    서보 5–6V 외부전원 / 모터 12V 외부전원
+                    서보 4.8–6V 외부전원 / 모터 12V 외부전원
                     (각 V+ ← 외부, GND ← 외부 ── Pi GND 공통)
 ```
 
@@ -71,7 +71,7 @@
 
 - 벨트 드라이버는 `TRASH_BELT_DRIVER`로 택일: `gpiozero`(GPIO23/24, 현행 기본) | `hiwonder`(I2C GPIO2/3, §6.1). 둘은 배타.
 - 서보 V+/모터 VM은 **외부 전원**에서, 신호선만 위 GPIO에 연결. Pi GPIO는 3.3V 로직(대부분 서보/드라이버 IN이 수용).
-- 서보 각도/벨트 시간 기본: 게이트 닫힘 0°/열림 90°, 분기 닫힘 0°/열림 60°, `T_belt` 3.0s (`TRASH_GATE_OPEN`/`TRASH_DIV_OPEN`/`TRASH_BELT_SECONDS`).
+- 서보(연속회전): 저속 `speed` 0.3 / 이동 `travel_s` 0.8s / 방향 `*_dir` ±1 — 하드스톱까지 구동 후 정지. 벨트 `T_belt` 3.0s (`TRASH_SERVO_SPEED`/`TRASH_SERVO_TRAVEL`/`TRASH_*_DIR`/`TRASH_BELT_SECONDS`).
 - 배선 상세·전원 주의는 [`hardware.md`](hardware.md).
 
 ---
@@ -331,7 +331,7 @@ sudo chmod 600 /opt/trash-sorter/secret/gemini-api-key.json
 
 ## 12. 캘리브레이션
 
-1. **서보 각도**: 운영자 정비 화면(iPad, 좌상단 3초 길게)에서 `sort pet/can/other`·`belt fwd/stop`로 개별 구동 → `TRASH_GATE_OPEN/CLOSED`, `TRASH_DIV_OPEN/CLOSED` 조정.
+1. **서보(연속회전)**: 양끝 **하드스톱** 설치 후, 운영자 정비 화면(iPad, 좌상단 3초 길게)에서 `sort pet/can/other`·`belt fwd/stop`로 개별 구동 → `TRASH_SERVO_SPEED`(저속)·`TRASH_SERVO_TRAVEL`(스톱 도달 시간)·`TRASH_*_DIR`(개/폐 방향) 조정.
 2. **벨트 시간**: 투입물이 분리수거함까지 이동하는 시간으로 `TRASH_BELT_SECONDS` 설정.
 3. **비전 임계값**: 캡처 프레임을 `.npy`로 저장 후
    ```bash

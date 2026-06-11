@@ -1,6 +1,6 @@
 """런타임 설정값. 모두 환경변수(``TRASH_*``)로 override 가능.
 
-GPIO 핀·서보 각도·타이밍·임계값은 현장 튜닝 대상이라 한 곳에 모은다.
+GPIO 핀·서보 구동·타이밍·임계값은 현장 튜닝 대상이라 한 곳에 모은다.
 docs/protocol.md §2.5(물리 제어), §6(타임아웃)와 연동.
 """
 
@@ -40,16 +40,25 @@ def _x(name: str, default: int) -> int:
 # → default_factory 사용. 덕분에 런타임/테스트에서 env override가 반영된다.
 @dataclass(frozen=True)
 class ServoConfig:
-    """게이트 1 + 분기 2 서보. 각도는 gpiozero AngularServo 기준(도)."""
+    """게이트 1 + 분기 2 서보. **SER0043(DF9GMS) = 360° 연속회전 서보**(위치제어 불가).
+
+    각도 대신 **저속 구동 + 시간(travel_s)** 으로 기구 하드스톱까지 이동 후 정지한다 —
+    최대 이동 위치는 기계식 스톱이 물리적으로 제한하고, 정지 후 위치도 스톱이 유지한다.
+    docs/hardware.md "서보" 참조. 전류(5V): 무부하 ~155mA/개, 스톨 ~830mA/개.
+    """
 
     gate_pin: int = field(default_factory=lambda: _i("TRASH_GATE_PIN", 17))
     left_pin: int = field(default_factory=lambda: _i("TRASH_LEFT_PIN", 27))
     right_pin: int = field(default_factory=lambda: _i("TRASH_RIGHT_PIN", 22))
 
-    gate_closed_deg: float = field(default_factory=lambda: _f("TRASH_GATE_CLOSED", 0.0))
-    gate_open_deg: float = field(default_factory=lambda: _f("TRASH_GATE_OPEN", 90.0))
-    diverter_closed_deg: float = field(default_factory=lambda: _f("TRASH_DIV_CLOSED", 0.0))
-    diverter_open_deg: float = field(default_factory=lambda: _f("TRASH_DIV_OPEN", 60.0))
+    # 저속 구동 세기(gpiozero Servo.value, 0..1). 낮을수록 느림. 정지는 detach(무신호).
+    speed: float = field(default_factory=lambda: _f("TRASH_SERVO_SPEED", 0.3))
+    # 한 스톱→반대 스톱 이동 시간(초). 하드스톱까지 충분히 — 현장 캘리브레이션 대상.
+    travel_s: float = field(default_factory=lambda: _f("TRASH_SERVO_TRAVEL", 0.8))
+    # 'open(방출/분기 열림)' 방향 부호(+1/-1). close는 반대 부호. 기구 장착·배선에 맞게 조정.
+    gate_dir: int = field(default_factory=lambda: _i("TRASH_GATE_DIR", 1))
+    left_dir: int = field(default_factory=lambda: _i("TRASH_LEFT_DIR", 1))
+    right_dir: int = field(default_factory=lambda: _i("TRASH_RIGHT_DIR", 1))
 
 
 @dataclass(frozen=True)
