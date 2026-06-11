@@ -13,6 +13,7 @@ DerivedData/
 .build-xcode/
 .build-device/
 .build-mac/
+.build-sim/
 
 # Python (pi/)
 .venv/

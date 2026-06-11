@@ -55,8 +55,8 @@ struct ProcessingView: View {
             // 현재 처리중인 쓰레기 사진 카드(폴라로이드 느낌)
             ZStack {
                 RoundedRectangle(cornerRadius: 28).fill(.white)
-                    .overlay(RoundedRectangle(cornerRadius: 28).stroke(Theme.paperDeep, lineWidth: 4))
-                    .shadow(color: Theme.ink.opacity(0.12), radius: 18, y: 10)
+                    .overlay(RoundedRectangle(cornerRadius: 28).stroke(Theme.line, lineWidth: 4))
+                    .shadow(color: .black.opacity(0.4), radius: 18, y: 10)
                 if let photo = app.photo {
                     Image(uiImage: photo).resizable().scaledToFill()
                         .clipShape(RoundedRectangle(cornerRadius: 22)).padding(12)

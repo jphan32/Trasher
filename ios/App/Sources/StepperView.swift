@@ -3,11 +3,11 @@
 import SwiftUI
 import TrasherCore
 
-/// AI 재활용 팁 박스(💡) — processing/reward 공용.
+/// AI 재활용 팁 박스(💡) — processing/reward 공용. 다크 면 위 정의된 카드 + 새싹 보더.
 struct TipBox: View {
     let text: String
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .top, spacing: 14) {
             Text("💡").font(.system(size: 30))
             Text(text)
                 .font(Theme.body(24))
@@ -16,7 +16,8 @@ struct TipBox: View {
         }
         .padding(20)
         .frame(maxWidth: 640)
-        .background(Theme.sprout.opacity(0.14), in: RoundedRectangle(cornerRadius: 20))
+        .background(Theme.surfaceHi, in: RoundedRectangle(cornerRadius: 20))
+        .overlay(RoundedRectangle(cornerRadius: 20).stroke(Theme.sprout.opacity(0.35), lineWidth: 1.5))
     }
 }
 
@@ -53,12 +54,13 @@ struct StepperView: View {
                         .animation(.easeOut(duration: 1.4).repeatForever(autoreverses: false), value: pulse)
                 }
                 Circle()
-                    .fill(done || active ? Theme.sprout : Theme.paperDeep.opacity(0.0))
-                    .overlay(Circle().stroke(done || active ? Color.clear : Theme.paperDeep, lineWidth: 4))
+                    .fill(done || active ? Theme.sprout : Color.clear)
+                    .overlay(Circle().stroke(done || active ? Color.clear : Theme.line, lineWidth: 4))
                     .frame(width: nodeSize, height: nodeSize)
+                    .shadow(color: done || active ? Theme.sprout.opacity(0.45) : .clear, radius: 6)
                 Image(systemName: done ? "checkmark" : step.symbol)
                     .font(.system(size: iconSize, weight: .black))
-                    .foregroundStyle(done || active ? .white : Theme.inkSoft)
+                    .foregroundStyle(done || active ? Theme.canvas : Theme.inkSoft)
             }
             if !compact {
                 Text(step.label)

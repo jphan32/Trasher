@@ -58,8 +58,8 @@ struct RootView: View {
         case .attract: AttractView(model: app.model)
         case .processing: ProcessingView(model: app.model)
         case .reward: RewardView(model: app.model)
-        case .error: StatusView(model: app.model, accent: Theme.clay, symbol: "exclamationmark.triangle.fill")
-        case .stalled: StatusView(model: app.model, accent: Theme.clay, symbol: "wifi.exclamationmark")
+        case .error: StatusView(model: app.model, accent: Theme.danger, symbol: "exclamationmark.triangle.fill")
+        case .stalled: StatusView(model: app.model, accent: Theme.danger, symbol: "wifi.exclamationmark")
         case .maintenance: StatusView(model: app.model, accent: Theme.inkSoft, symbol: "wrench.and.screwdriver.fill")
         }
     }

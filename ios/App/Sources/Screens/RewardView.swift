@@ -55,11 +55,12 @@ struct RewardView: View {
             if let photo = app.photo {
                 Image(uiImage: photo).resizable().scaledToFill()
                     .frame(width: 236, height: 236).clipShape(RoundedRectangle(cornerRadius: 24))
-                    .overlay(RoundedRectangle(cornerRadius: 24).stroke(Theme.paperDeep, lineWidth: 3))
+                    .overlay(RoundedRectangle(cornerRadius: 24).stroke(Theme.line, lineWidth: 3))
+                    .shadow(color: .black.opacity(0.35), radius: 12, y: 8)
             }
             HStack(alignment: .center, spacing: 14) {
                 Text(category.displayName)
-                    .font(Theme.display(60)).foregroundStyle(.white)
+                    .font(Theme.display(60)).foregroundStyle(Theme.onCategory)
                     .lineLimit(1).minimumScaleFactor(0.6)
                     .padding(.horizontal, 30).padding(.vertical, 12)
                     .background(Theme.category(category), in: RoundedRectangle(cornerRadius: 22))
@@ -106,7 +107,9 @@ struct RewardView: View {
         }
         .padding(26)
         .frame(maxWidth: 440)
-        .background(.white.opacity(0.5), in: RoundedRectangle(cornerRadius: 32))
+        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 32))
+        .overlay(RoundedRectangle(cornerRadius: 32).stroke(Theme.line, lineWidth: 1.5))
+        .shadow(color: .black.opacity(0.35), radius: 22, y: 12)
     }
 
     // 카피는 lollipops가 아니라 recyclable로 분기(재활용 가능하나 0점인 경우 오표기 방지, trash-iwg).

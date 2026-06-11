@@ -13,7 +13,8 @@ struct SampleImageFetcher: PhotoFetcher {
         #if canImport(UIKit)
         let size = CGSize(width: 300, height: 300)
         let image = UIGraphicsImageRenderer(size: size).image { ctx in
-            UIColor(Theme.paperDeep).setFill()
+            // 합성 "사진" — 촬영물은 밝은 배경이 자연스러워 다크 UI와 별개로 라이트 톤 유지.
+            UIColor(white: 0.93, alpha: 1).setFill()
             ctx.fill(CGRect(origin: .zero, size: size))
             UIColor(Theme.sprout).setFill()
             ctx.cgContext.fillEllipse(in: CGRect(x: 75, y: 75, width: 150, height: 150))

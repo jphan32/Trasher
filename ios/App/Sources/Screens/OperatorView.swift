@@ -25,7 +25,7 @@ struct OperatorView: View {
                     Text("비상 정지 (E-STOP)")
                         .font(Theme.title(34)).foregroundStyle(.white)
                         .frame(maxWidth: .infinity).padding(.vertical, 26)
-                        .background(Theme.clay, in: RoundedRectangle(cornerRadius: 20))
+                        .background(Theme.danger, in: RoundedRectangle(cornerRadius: 20))
                 }
             }
             .padding(48)
@@ -57,7 +57,7 @@ struct OperatorView: View {
         switch app.model.screen {
         case .attract, .reward: return Theme.sprout
         case .processing: return Theme.canSlate
-        case .error, .stalled: return Theme.clay
+        case .error, .stalled: return Theme.danger
         default: return .white.opacity(0.4)
         }
     }
