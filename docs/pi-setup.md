@@ -197,6 +197,22 @@ bluetoothctl show                          # 어댑터 확인(Pi 4B 내장 BT)
 - 앱은 **bless**(BlueZ/dbus)로 GATT Peripheral 광고. `pi` 사용자가 `bluetooth` 그룹에 있어야 함(§8).
 - 외장 BT 동글 없이 Pi 4B 내장 사용. BLE·WiFi 동시 사용 시 §9의 WiFi 절전 끄기 권장(간섭/끊김 완화).
 
+### 7.1 페어링 에이전트 (iOS 본딩 영속화 — **필수**)
+
+GATT 특성은 평문(암호화 불요)이지만, **본딩이 Pi에 저장되지 않으면 iOS가 매 연결마다 BT 페어링을
+재요구**하고, 그 프롬프트가 연결 직후 브링업(notify 구독·DeviceInfo read)을 막아 `Command{start}`가
+안 나가 **감지·촬영이 시작되지 않는다**(→ iPad에 사진 미표시). Just Works 에이전트로 자동 수락·본딩한다.
+
+```bash
+sudo apt install -y bluez-tools
+sudo cp pi/deploy/bt-agent.service /etc/systemd/system/   # NoInputNoOutput JustWorks 에이전트
+sudo sed -i 's/^#\?JustWorksRepairing.*/JustWorksRepairing = always/' /etc/bluetooth/main.conf
+sudo systemctl daemon-reload && sudo systemctl enable --now bt-agent
+sudo systemctl restart bluetooth && sudo systemctl restart trash-sorter
+```
+- 검증: 첫 1회 페어링 후 `bluetoothctl devices Bonded`에 iPad가 남으면 영속 OK(이후 프롬프트 없음).
+- `install.sh`가 이 단계를 자동 수행([4b/5]). 스테일 본딩이면 iPad에서 *설정→Bluetooth→이 기기 삭제* 후 재연결.
+
 ---
 
 ## 8. 사용자 권한 (그룹)

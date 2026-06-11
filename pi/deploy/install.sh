@@ -63,6 +63,18 @@ sed -e "s/^User=.*/User=$RUN_USER/" -e "s/^Group=.*/Group=$RUN_USER/" \
 systemctl daemon-reload
 systemctl enable "$SERVICE"
 
+echo "[4b/5] BLE 페어링 에이전트(iOS 본딩 영속화 — 재페어링 반복 방지)"
+# iOS는 본딩이 Pi에 저장돼야 재페어링을 멈춘다. bt-agent(NoInputNoOutput)=JustWorks 자동수락+본딩,
+# JustWorksRepairing=always=재페어링 허용. 없으면 매 연결마다 페어링→브링업 차단. docs/pi-setup.md §7.1.
+apt-get install -y bluez-tools >/dev/null 2>&1 || echo "  ⚠ bluez-tools 설치 실패 — 수동: apt install bluez-tools"
+cp "$SCRIPT_DIR/bt-agent.service" /etc/systemd/system/bt-agent.service
+sed -i 's/^#\?JustWorksRepairing.*/JustWorksRepairing = always/' /etc/bluetooth/main.conf
+grep -q '^JustWorksRepairing = always' /etc/bluetooth/main.conf \
+  || sed -i '/^\[General\]/a JustWorksRepairing = always' /etc/bluetooth/main.conf
+systemctl daemon-reload
+systemctl enable --now bt-agent
+systemctl restart bluetooth
+
 echo "[5/5] 서비스 시작"
 systemctl restart "$SERVICE"
 

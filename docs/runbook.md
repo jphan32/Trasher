@@ -55,6 +55,7 @@
 | 증상 | 원인 | 조치 |
 |---|---|---|
 | iPad가 계속 "연결 중" | Pi BLE 미광고 | 아래 **BLE 복구** |
+| iPad가 **매 연결마다 페어링** 요구 + 사진 안 뜸 | 본딩 미영속 → 브링업(구독/start) 차단 | `systemctl is-active bt-agent` 확인(없으면 pi-setup §7.1 적용). `bluetoothctl devices Bonded`에 iPad 표시돼야 정상 |
 | `bluetoothctl show` = `Powered: no`, 광고 실패 | **rfkill 소프트 블록**(systemd-rfkill 복원) | `sudo rfkill unblock bluetooth` + `echo 0 > /var/lib/systemd/rfkill/platform-soc-amba-fe201000.serial:bluetooth` 후 `bluetoothctl power on` |
 | 분류가 항상 회전/엉뚱(이미지 무관) | Gemini 키 없음 → **MockClassifier** | `/etc/trash-sorter.env`에 `TRASH_GEMINI_CREDENTIALS` 설정 확인, 서비스 재시작 |
 | 분류 시 429/"credits depleted" | **Gemini 결제/쿼터 소진** | AI Studio에서 크레딧 충전 또는 다른 SA 키로 교체(`secret/gemini-api-key.json`) |

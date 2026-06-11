@@ -1,0 +1,16 @@
+# BLE 페어링 에이전트 — iOS 본딩 영속화(재페어링 반복 방지).
+# bt-agent(NoInputNoOutput)가 Just Works 페어링을 자동 수락하고 본딩을 저장한다.
+# 본딩이 Pi에 영속되지 않으면 iOS가 매 연결마다 재페어링을 요구해 브링업(구독·start)이 막힌다.
+# install.sh가 /etc/systemd/system/로 복사·enable. bluez-tools 패키지 필요. docs/pi-setup.md §7.1.
+[Unit]
+Description=BLE JustWorks pairing agent (auto-accept + bond)
+After=bluetooth.service
+Requires=bluetooth.service
+
+[Service]
+ExecStart=/usr/bin/bt-agent --capability=NoInputNoOutput
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
