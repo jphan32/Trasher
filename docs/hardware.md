@@ -12,7 +12,7 @@ Raspberry Pi 물리 구성 레퍼런스. GPIO 핀은 `pi/src/trash_sorter/config
 | 2 | picamera2 호환 카메라(CSI) | 변이 감지 + 사진 촬영 |
 | 3 | 게이트 서보 ×1 | 투입물을 캡처 존에 정위치 홀드(닫힘) / 방출(열림) |
 | 4 | 분기 서보 ×2 (좌/우) | 경로 분기: 좌 열림=좌, 우 열림=우, 둘 다 닫힘=중앙 |
-| 5 | DC 기어모터 + 모터드라이버 | 컨베이어 벨트 구동(시간 기반) |
+| 5 | 벨트 모터 — Wheeltec MG310P20 + 드라이버(Hiwonder 4ch I2C SA8870C, 또는 L298N류) | 컨베이어 벨트 구동(시간 기반). 전력상 2채널만 사용 |
 | 6 | 서보/모터 전용 5–6V 전원 | 서보·모터 전류(Pi 5V 레일과 분리, **공통 GND**) |
 
 ## GPIO 핀맵 (BCM, config.py 기본값)
@@ -22,11 +22,14 @@ Raspberry Pi 물리 구성 레퍼런스. GPIO 핀은 `pi/src/trash_sorter/config
 | 게이트 서보 PWM | **GPIO17** | `gate_pin` / `TRASH_GATE_PIN` | gpiozero `AngularServo` |
 | 분기 서보 좌 PWM | **GPIO27** | `left_pin` / `TRASH_LEFT_PIN` | |
 | 분기 서보 우 PWM | **GPIO22** | `right_pin` / `TRASH_RIGHT_PIN` | |
-| 벨트 모터 정방향 | **GPIO23** | `forward_pin` / `TRASH_BELT_FWD_PIN` | 모터드라이버 IN1 |
-| 벨트 모터 역방향 | **GPIO24** | `backward_pin` / `TRASH_BELT_BWD_PIN` | 모터드라이버 IN2 |
+| 벨트 IN1 *(driver=gpiozero)* | **GPIO23** | `forward_pin` / `TRASH_BELT_FWD_PIN` | 모터드라이버 IN1 |
+| 벨트 IN2 *(driver=gpiozero)* | **GPIO24** | `backward_pin` / `TRASH_BELT_BWD_PIN` | 모터드라이버 IN2 |
+| 벨트 I2C SDA *(driver=hiwonder)* | **GPIO2** | `i2c_addr` / `TRASH_BELT_I2C_ADDR` | I2C1 SDA, 보드 기본 `0x34` |
+| 벨트 I2C SCL *(driver=hiwonder)* | **GPIO3** | `i2c_bus` / `TRASH_BELT_I2C_BUS` | I2C1 SCL, bus `1` |
 
 > 서보 각도/벨트 시간 기본값: 게이트 닫힘 0° / 열림 90°, 분기 닫힘 0° / 열림 60°, `T_belt` 3.0s.
 > (`TRASH_GATE_OPEN`, `TRASH_DIV_OPEN`, `TRASH_BELT_SECONDS` 등으로 보정.)
+> 벨트 드라이버는 `TRASH_BELT_DRIVER`로 선택(`gpiozero` 현행 기본 | `hiwonder` I2C). 둘은 배타적.
 
 ## 배선
 
@@ -37,12 +40,32 @@ Raspberry Pi 물리 구성 레퍼런스. GPIO 핀은 `pi/src/trash_sorter/config
 서보 GND(갈색)  ── 외부 전원 GND ── Pi GND   (공통 GND 필수)
 ```
 
-### 벨트 DC 모터 (모터드라이버 경유, 예: L298N / DRV8871)
+### 벨트 모터
+
+벨트는 **시간 기반**(T_belt초 구동 후 정지, §2.5)이라 폐루프가 필요 없다 → 개루프로 충분.
+드라이버는 `TRASH_BELT_DRIVER`로 선택한다.
+
+**(A) Hiwonder 4채널 엔코더 모터 드라이버 (SA8870C, I2C) — 계획**
+
+모터 = Wheeltec **MG310P20** ×2. 전력 한계로 **2채널만** 사용. 두 모터는 벨트 구동부 한쪽에
+**서로 반대 방향**으로 장착되므로, 한 채널 부호를 뒤집어(`TRASH_BELT_INVERT_B`, 기본 true)
+같은 선속도 방향을 만든다. 보드 자체 MCU가 엔코더·폐루프를 처리하므로 Pi는 I2C로 PWM만 쓴다.
 ```
-Pi GPIO23 ── 드라이버 IN1
-Pi GPIO24 ── 드라이버 IN2
-드라이버 OUT1/OUT2 ── DC 모터
-드라이버 VM(모터전원) ── 5–12V 외부 전원   드라이버 GND ── Pi GND(공통)
+Pi GPIO2(SDA) ── 보드 SDA      Pi GPIO3(SCL) ── 보드 SCL      Pi GND ── 보드 GND (공통 필수)
+보드 VM(모터전원) ── 독립 12V 전원(5–15V)        보드 채널0/1 OUT ── MG310P20 ×2
+```
+- Pi I2C는 3.3V 로직 — 보드가 3.3/5V 호환이라 직결, 풀업 1.8k–4.7k.
+- 보드 I2C의 **5V로 Pi에 급전 금지**(SDA/SCL/GND 3선만, Pi는 자체 전원). 모터전류를 Pi로 끌면 브라운아웃.
+- 제어: 개루프 고정 PWM(register `0x1f`, 채널별 -100..100). 폐루프(`0x33`)·엔코더 PPR(Hall/GMR)은 belt에 불필요.
+- **선결(현재 미충족)**: I2C 활성화(`dtparam=i2c_arm=on` + 재부팅) → `sudo apt install i2c-tools` →
+  `i2cdetect -y 1`로 주소 확인(기본 가정 `0x34`). 절차는 [`pi-setup.md`](pi-setup.md).
+- env: `TRASH_BELT_DRIVER=hiwonder`, `TRASH_BELT_I2C_ADDR/BUS`, `TRASH_BELT_CH_A/B`, `TRASH_BELT_PWM`, `TRASH_BELT_INVERT_A/B`.
+- 프로토콜(0x1f 4채널 블록 형식)은 공식 자료로 확정: <https://www.hiwonder.com/products/4-channel-encoder-motor-driver>
+
+**(B) GPIO + 모터드라이버 (L298N / DRV8871류) — 현행 기본**
+```
+Pi GPIO23 ── 드라이버 IN1   Pi GPIO24 ── 드라이버 IN2   OUT1/2 ── DC 모터
+드라이버 VM ── 5–12V 외부 전원   드라이버 GND ── Pi GND(공통)
 ```
 gpiozero `Motor(forward=23, backward=24)` — 정방향만 사용(시간 기반 완료).
 
