@@ -68,6 +68,40 @@ def test_gating_no_detection_until_started(tmp_path) -> None:
     assert ble.photos == []
 
 
+def test_capture_waits_for_motion_stop(tmp_path) -> None:
+    # 감지(begin_detection)는 즉시지만, 물체가 움직이는 동안엔 촬영하지 않고
+    # 멎은 뒤 settle_seconds 무동작일 때만 촬영(흔들림 방지).
+    frames = [blank(0), blank(255), blank(0), blank(255), *[blank(255)] * 4]
+    orch, ble, _hw, clock = build(tmp_path, frames)
+    ble.simulate_command(Command(cmd=CommandType.START, id=1))
+    for _ in range(4):  # START+f1, f2→DETECTING, f3·f4 지속 변이(교대)
+        clock.advance(0.6)  # settle(0.5) 넘겨도
+        orch.tick()
+    assert orch._sm.state is PiState.DETECTING  # noqa: SLF001 - 움직이는 중 → 미촬영
+    assert ble.photos == []
+    clock.advance(0.6)
+    orch.tick()  # 정지 프레임(변이 없음) + settle 경과 → 촬영
+    assert orch._sm.state is PiState.AWAITING_RESULT  # noqa: SLF001
+    assert len(ble.photos) == 1
+
+
+def test_capture_forced_after_detect_max(tmp_path) -> None:
+    # 움직임이 계속돼 정지하지 않아도 detect_max_seconds 도달 시 강제 촬영(무한 대기 방지).
+    frames = [blank(0), *[blank(255), blank(0)] * 60]  # 매 프레임 변이(지속 움직임)
+    orch, ble, _hw, clock = build(tmp_path, frames)
+    ble.simulate_command(Command(cmd=CommandType.START, id=1))
+    orch.tick()  # START + f1
+    orch.tick()  # f2 → DETECTING (detect_since=0)
+    assert orch._sm.state is PiState.DETECTING  # noqa: SLF001
+    for _ in range(30):  # 0.3s×30=9s > detect_max(5s); 매 tick 변이라 settle은 안 됨
+        clock.advance(0.3)
+        orch.tick()
+        if ble.photos:
+            break
+    assert len(ble.photos) == 1  # detect_max에서 강제 촬영
+    assert orch._sm.state is PiState.AWAITING_RESULT  # noqa: SLF001
+
+
 def _run_full_cycle(orch, ble, clock, category):
     ble.simulate_command(Command(cmd=CommandType.START, id=1))
     orch.tick()  # START 처리

@@ -65,6 +65,7 @@ class Orchestrator:
         ble.on_disconnect = lambda: self._disconnects.put(True)
 
         self._detect_since: float | None = None
+        self._last_motion: float | None = None  # DETECTING 중 마지막 변이 시각(정지 판정 기준)
         self._awaiting_since: float | None = None
         self._sort_since: float | None = None  # 논블로킹 사이클 sorting 타이밍
         self._manual_sort_since: float | None = None  # 논블로킹 수동(진단) sort 타이밍
@@ -215,15 +216,24 @@ class Orchestrator:
         if self._motion.is_motion(self._cam.read_frame()):
             if self._sm.begin_detection():
                 self._detect_since = self._clock()
+                self._last_motion = self._clock()  # 방금 변이 감지 → 정지 타이머 기준
                 self._publish_status()
 
     def _maybe_capture(self) -> None:
-        # 안정화(settle) 시간 경과 후 촬영. docs/protocol.md §"카메라 캡처".
-        self._cam.read_frame()  # 스트림 유지
+        # 움직임이 멎고 settle_seconds 동안 정지면 촬영. docs/protocol.md §"카메라 캡처".
+        # 감지는 OK지만 움직이는 중 촬영하면 흔들리므로, 정지 확인 후 촬영한다.
+        frame = self._cam.read_frame()
+        now = self._clock()
         if self._detect_since is None:
-            self._detect_since = self._clock()
-        if self._clock() - self._detect_since < self._s.vision.settle_seconds:
-            return
+            self._detect_since = now
+        if self._last_motion is None:
+            self._last_motion = now
+        if self._motion.is_motion(frame):
+            self._last_motion = now  # 아직 움직임 → 정지 타이머 리셋(계속 대기)
+        settled = now - self._last_motion >= self._s.vision.settle_seconds
+        overdue = now - self._detect_since >= self._s.vision.detect_max_seconds  # 무한대기 방지
+        if not settled and not overdue:
+            return  # 정지(또는 최대 대기) 전 — 촬영 보류
         self._sorter.hold()  # 게이트 닫아 캡처 존 홀드
         self._sm.begin_capture()
         cycle = self._sm.cycle
@@ -281,6 +291,7 @@ class Orchestrator:
 
     def _reset_timers(self) -> None:
         self._detect_since = None
+        self._last_motion = None
         self._awaiting_since = None
 
     # --- 출력 --------------------------------------------------------------

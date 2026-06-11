@@ -91,7 +91,10 @@ class VisionConfig:
     height: int = field(default_factory=lambda: _i("TRASH_CAM_H", 720))
     jpeg_quality: int = field(default_factory=lambda: _i("TRASH_JPEG_Q", 80))
     motion_threshold: float = field(default_factory=lambda: _f("TRASH_MOTION_THRESH", 0.02))
+    # 움직임이 멎은 뒤 '정지' 인정 무동작 지속(초). 이 시간 변이 없으면 촬영(흔들림 방지).
     settle_seconds: float = field(default_factory=lambda: _f("TRASH_SETTLE_SEC", 0.5))
+    # 움직임이 계속돼 정지하지 않을 때 강제 촬영까지의 최대 감지시간(초). 무한 대기 방지 안전장치.
+    detect_max_seconds: float = field(default_factory=lambda: _f("TRASH_DETECT_MAX", 5.0))
 
 
 @dataclass(frozen=True)
