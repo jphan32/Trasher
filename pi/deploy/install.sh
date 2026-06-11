@@ -68,4 +68,4 @@ systemctl restart "$SERVICE"
 
 echo
 echo "완료. 상태: systemctl status trash-sorter | 로그: journalctl -u trash-sorter -f"
-echo "참고: 서보 안정화는 'sudo systemctl enable --now pigpiod' + env GPIOZERO_PIN_FACTORY=pigpio."
+echo "참고: 서보는 lgpio 기본 팩토리로 동작(Trixie엔 pigpio 데몬 없음). PWMSoftwareFallback 경고는 무시."

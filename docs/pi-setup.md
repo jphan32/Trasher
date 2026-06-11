@@ -101,9 +101,10 @@ sudo apt update && sudo apt full-upgrade -y
 # libcamera 바인딩은 PyPI에 없고 전체 소스 빌드 산물이라 apt 패키지를 그대로 쓴다(§10 system-site).
 sudo apt install -y python3-picamera2 rpicam-apps
 
-# 서보 PWM 안정화(하드웨어 타이밍) + BLE + 빌드 도구(gpiozero/bless용 빌드 헤더 포함)
-sudo apt install -y pigpio python3-pigpio \
-                    bluez libdbus-1-dev libglib2.0-dev \
+# BLE + 빌드 도구(gpiozero/bless용 빌드 헤더 포함)
+# ⚠️ Trixie엔 pigpio 데몬 패키지가 없다(클라이언트 lib만). gpiozero는 lgpio가 기본 —
+#    python3-lgpio/python3-gpiozero는 OS에 기본 포함. 서보는 lgpio 경로로 동작(§6).
+sudo apt install -y bluez libdbus-1-dev libglib2.0-dev \
                     build-essential libcap-dev git
 
 # uv (Python 환경/의존성 관리)
@@ -152,22 +153,13 @@ uv run trash-sorter --tune <frames_dir> [--threshold 0.02] [--pixel-delta 25]
 
 ---
 
-## 6. 서보 PWM 안정화 (pigpio)
+## 6. 서보 PWM (lgpio)
 
-소프트웨어 PWM은 서보 지터가 심하다. **pigpio 데몬**으로 하드웨어 타이밍 PWM을 쓴다(gpiozero `PiGPIOFactory`).
+**Trixie(Debian 13)에는 pigpio 데몬 패키지가 없다** — apt엔 클라이언트 lib(`libpigpiod-if*`, `python3-pigpio`)만 있고 `pigpiod`/`GPIOZERO_PIN_FACTORY=pigpio`는 쓸 수 없다(라이브 검증). gpiozero는 **lgpio**(`python3-lgpio`, OS 기본 포함)를 기본 팩토리로 쓰며 별도 데몬·설정이 필요 없다. 그대로 두면 된다.
 
-```bash
-sudo systemctl enable --now pigpiod        # 부팅 시 자동 + 즉시 시작
-```
-
-앱이 pigpio 팩토리를 쓰도록 환경변수 설정(§11 env 파일에 추가):
-
-```bash
-GPIOZERO_PIN_FACTORY=pigpio
-```
-
-> Trixie gpiozero 기본 팩토리는 `lgpio`로도 동작하지만, 서보 안정성을 위해 pigpio 권장.
-> (pigpio는 **Pi 4B 한정** — Pi 5는 RP1로 미지원. 본 부스는 4B라 OK.)
+> lgpio 서보는 소프트웨어 타이밍 PWM이라 gpiozero가 `PWMSoftwareFallback`(지터 경고)을 띄운다 — **무시해도 된다**. 본 프로젝트 서보는 연속회전(SER0043)을 저속·시간으로 하드스톱까지 구동 후 정지(detach)하는 방식이라 미세 지터가 동작에 영향을 주지 않는다(§2.5).
+>
+> (참고: Bookworm 이하에선 pigpio로 하드웨어 타이밍이 가능했으나 본 부스는 Trixie 전제라 해당 없음. pigpio는 Pi 4B 한정·Pi 5 미지원.)
 
 ### 6.1 벨트 I2C 드라이버 (Hiwonder 4ch SA8870C) — `TRASH_BELT_DRIVER=hiwonder` 사용 시
 
@@ -292,8 +284,8 @@ sudo nano /etc/trash-sorter.env
 핵심 항목:
 
 ```ini
-# 서보 안정화(§6)
-GPIOZERO_PIN_FACTORY=pigpio
+# 서보 PWM(§6): Trixie는 lgpio 기본 — 이 변수는 설정하지 않는다(pigpio 데몬 없음).
+# GPIOZERO_PIN_FACTORY 미지정 = lgpio 자동.
 
 # 네트워크
 TRASH_ADVERTISED_IP=          # 빈 값=자동감지(DHCP 예약 시 비워도 됨)
@@ -365,7 +357,7 @@ uv run trash-sorter --simulate
 
 - [ ] Pi OS 64-bit Trixie(Debian 13) Lite, 호스트명 `sorter-01`, SSH/WiFi/로캘
 - [ ] `rpicam-hello --list-cameras` 동작 + venv에서 `import picamera2, libcamera` 성공(apt python3-picamera2 + system-site)
-- [ ] `pigpiod` enable + `GPIOZERO_PIN_FACTORY=pigpio`
+- [ ] 서보 = lgpio 기본 팩토리(Trixie, pigpio 데몬 없음 — `GPIOZERO_PIN_FACTORY` 미설정)
 - [ ] `bluetooth` 서비스 active, `pi`가 `bluetooth` 그룹
 - [ ] `pi` ∈ `gpio,video,bluetooth,dialout`
 - [ ] WiFi = 인터넷 라우터, DHCP 예약, AP격리 OFF, **WiFi 절전 off**
