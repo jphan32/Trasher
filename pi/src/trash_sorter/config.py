@@ -25,6 +25,17 @@ def _s(name: str, default: str) -> str:
     return os.environ.get(name, default)
 
 
+def _b(name: str, default: bool) -> bool:
+    raw = os.environ.get(name)
+    return default if raw is None else raw.strip().lower() in ("1", "true", "on", "yes")
+
+
+def _x(name: str, default: int) -> int:
+    # 16진("0x34")·10진("52") 모두 허용 — I2C 주소 등. base=0이 접두어로 진법 추론.
+    raw = os.environ.get(name)
+    return default if raw is None else int(raw, 0)
+
+
 # 기본값은 load_settings()/인스턴스 생성 시점에 env를 읽는다(import 시점 고정이 아님)
 # → default_factory 사용. 덕분에 런타임/테스트에서 env override가 반영된다.
 @dataclass(frozen=True)
@@ -43,9 +54,26 @@ class ServoConfig:
 
 @dataclass(frozen=True)
 class BeltConfig:
+    run_seconds: float = field(default_factory=lambda: _f("TRASH_BELT_SECONDS", 3.0))  # §2.5 T_belt
+
+    # 벨트 드라이버: "gpiozero"(GPIO+L298N류, 현행 기본) | "hiwonder"(I2C 4ch SA8870C).
+    # I2C 활성화·보드 배선 후 TRASH_BELT_DRIVER=hiwonder로 전환. docs/hardware.md.
+    driver: str = field(default_factory=lambda: _s("TRASH_BELT_DRIVER", "gpiozero"))
+
+    # --- gpiozero(GPIO) 드라이버 핀(BCM) ---
     forward_pin: int = field(default_factory=lambda: _i("TRASH_BELT_FWD_PIN", 23))
     backward_pin: int = field(default_factory=lambda: _i("TRASH_BELT_BWD_PIN", 24))
-    run_seconds: float = field(default_factory=lambda: _f("TRASH_BELT_SECONDS", 3.0))  # §2.5 T_belt
+
+    # --- Hiwonder I2C 드라이버(개루프 PWM, register 0x1f) ---
+    # 시간 기반 벨트라 폐루프(0x33)·엔코더 PPR 불필요 — 개루프 PWM으로 충분.
+    i2c_bus: int = field(default_factory=lambda: _i("TRASH_BELT_I2C_BUS", 1))
+    i2c_addr: int = field(default_factory=lambda: _x("TRASH_BELT_I2C_ADDR", 0x34))
+    pwm: int = field(default_factory=lambda: _i("TRASH_BELT_PWM", 60))  # 개루프 세기 0..100
+    ch_a: int = field(default_factory=lambda: _i("TRASH_BELT_CH_A", 0))  # 보드 채널 인덱스 0..3
+    ch_b: int = field(default_factory=lambda: _i("TRASH_BELT_CH_B", 1))
+    # 미러 장착(서로 반대 방향) 2모터 → 한쪽 부호를 뒤집어 같은 선속도 방향으로. 배선에 맞게 조정.
+    invert_a: bool = field(default_factory=lambda: _b("TRASH_BELT_INVERT_A", False))
+    invert_b: bool = field(default_factory=lambda: _b("TRASH_BELT_INVERT_B", True))
 
 
 @dataclass(frozen=True)

@@ -7,12 +7,13 @@ from __future__ import annotations
 
 from ..config import Settings
 from .base import HardwareController, Route
+from .belt import build_belt_driver
 
 
 class GpiozeroHardware(HardwareController):
     def __init__(self, settings: Settings) -> None:
         try:
-            from gpiozero import AngularServo, Motor  # type: ignore[import-not-found]
+            from gpiozero import AngularServo  # type: ignore[import-not-found]
         except ImportError as e:  # pragma: no cover - Pi 전용
             raise RuntimeError(
                 "gpiozero를 불러올 수 없습니다. "
@@ -20,12 +21,12 @@ class GpiozeroHardware(HardwareController):
             ) from e
 
         s = settings.servo
-        b = settings.belt
         self._s = settings
         self._gate = AngularServo(s.gate_pin, min_angle=0, max_angle=180)
         self._left = AngularServo(s.left_pin, min_angle=0, max_angle=180)
         self._right = AngularServo(s.right_pin, min_angle=0, max_angle=180)
-        self._belt = Motor(forward=b.forward_pin, backward=b.backward_pin)
+        # 벨트는 드라이버로 분리(gpiozero GPIO | Hiwonder I2C). config.belt.driver로 선택.
+        self._belt = build_belt_driver(settings)
         self.set_gate(open=False)
         self.set_route("center")
 
@@ -42,7 +43,7 @@ class GpiozeroHardware(HardwareController):
 
     def belt(self, *, on: bool) -> None:
         if on:
-            self._belt.forward()
+            self._belt.run()
         else:
             self._belt.stop()
 
