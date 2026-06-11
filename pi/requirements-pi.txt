@@ -18,4 +18,4 @@
 opencv-python-headless
 gpiozero
 bless
-smbus2  # Hiwonder 4ch 모터 드라이버(SA8339/SA8870C) I2C 제어 — 벨트(TRASH_BELT_DRIVER=hiwonder)
+smbus2  # Hiwonder 4ch 모터 드라이버(SA8870C) I2C 제어 — 벨트(TRASH_BELT_DRIVER=hiwonder)

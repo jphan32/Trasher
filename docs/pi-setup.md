@@ -17,7 +17,7 @@
 | 3 | **Pi 전용 PSU** 5V/3A USB-C 공식 | Pi 단독 급전 |
 | 4 | Pi Camera (CSI, v2/v3 또는 호환) + CSI 리본 | picamera2 |
 | 5 | 서보 ×3 (게이트1 + 분기 좌/우) | **SER0043**(DF9GMS, 360° 연속회전, 4.8–6V) — 양끝 하드스톱 필요 |
-| 6 | 벨트 모터 Wheeltec **MG310P20** ×2 + **드라이버**(Hiwonder 4ch I2C SA8339/SA8870C, 또는 L298N류) + **I2C 레벨시프터**(측정 후 5V면 필요) | 컨베이어. 전력상 2채널 |
+| 6 | 벨트 모터 Wheeltec **MG310P20** ×2 + **드라이버**(Hiwonder 4ch I2C SA8870C, 또는 L298N류) + **I2C 레벨시프터**(측정 후 5V면 필요) | 컨베이어. 전력상 2채널 |
 | 7 | **서보·모터 전용 전원** — 서보 4.8–6V(SER0043×3 → 5V ≥3A) / 모터 7.4V(MG310P20 7.4V판, 보드 VM 5–15V·≥5A) | Pi 5V 레일과 분리 |
 | 8 | 점퍼선, 공통 GND 배선 | |
 
@@ -169,7 +169,7 @@ GPIOZERO_PIN_FACTORY=pigpio
 > Trixie gpiozero 기본 팩토리는 `lgpio`로도 동작하지만, 서보 안정성을 위해 pigpio 권장.
 > (pigpio는 **Pi 4B 한정** — Pi 5는 RP1로 미지원. 본 부스는 4B라 OK.)
 
-### 6.1 벨트 I2C 드라이버 (Hiwonder 4ch SA8339/SA8870C) — `TRASH_BELT_DRIVER=hiwonder` 사용 시
+### 6.1 벨트 I2C 드라이버 (Hiwonder 4ch SA8870C) — `TRASH_BELT_DRIVER=hiwonder` 사용 시
 
 벨트를 Hiwonder I2C 드라이버로 구동할 때만 필요(기본 `gpiozero` 드라이버는 불필요). 배선·주의는
 [`hardware.md`](hardware.md) "벨트 모터 (A)".
