@@ -87,8 +87,10 @@ class BeltConfig:
 
 @dataclass(frozen=True)
 class VisionConfig:
-    width: int = field(default_factory=lambda: _i("TRASH_CAM_W", 1280))
-    height: int = field(default_factory=lambda: _i("TRASH_CAM_H", 720))
+    # 캡처 해상도. IMX219(Pi Cam v2)는 4:3 센서 → 4:3 풀-FOV 모드(1640×1232)로 화각 손실 방지.
+    # 16:9(예 1280×720)는 센서를 크롭해 FOV↓. picamera2_impl이 ScalerCrop=전체로 풀-FOV 강제.
+    width: int = field(default_factory=lambda: _i("TRASH_CAM_W", 1640))
+    height: int = field(default_factory=lambda: _i("TRASH_CAM_H", 1232))
     jpeg_quality: int = field(default_factory=lambda: _i("TRASH_JPEG_Q", 80))
     motion_threshold: float = field(default_factory=lambda: _f("TRASH_MOTION_THRESH", 0.02))
     # 움직임이 멎은 뒤 '정지' 인정 무동작 지속(초). 이 시간 변이 없으면 촬영(흔들림 방지).

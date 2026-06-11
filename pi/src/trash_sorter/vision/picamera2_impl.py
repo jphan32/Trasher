@@ -23,6 +23,13 @@ class Picamera2Camera(Camera):
         )
         self._cam.configure(config)
         self._cam.start()
+        # 전체 센서 FOV 사용(줌인 방지): ScalerCrop을 전체 픽셀어레이로 고정.
+        # IMX219 등은 작은/16:9 해상도에서 센서 중앙을 크롭(줌)하므로 4:3 풀해상도 영역을 강제한다.
+        try:
+            w, h = self._cam.camera_properties["PixelArraySize"]
+            self._cam.set_controls({"ScalerCrop": (0, 0, int(w), int(h))})
+        except Exception:  # noqa: BLE001 - 속성/컨트롤 미지원이면 기본 동작 유지
+            pass
 
     def read_frame(self) -> Frame:  # pragma: no cover - Pi 전용
         import cv2  # type: ignore[import-not-found]
