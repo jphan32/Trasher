@@ -23,13 +23,21 @@ class Picamera2Camera(Camera):
         )
         self._cam.configure(config)
         self._cam.start()
-        # 전체 센서 FOV 사용(줌인 방지): ScalerCrop을 전체 픽셀어레이로 고정.
-        # IMX219 등은 작은/16:9 해상도에서 센서 중앙을 크롭(줌)하므로 4:3 풀해상도 영역을 강제한다.
+        ctrls: dict = {}
+        # 전체 센서 FOV(줌인 방지): ScalerCrop=전체 픽셀어레이. IMX219 저해상도 중앙크롭 회피.
         try:
             w, h = self._cam.camera_properties["PixelArraySize"]
-            self._cam.set_controls({"ScalerCrop": (0, 0, int(w), int(h))})
-        except Exception:  # noqa: BLE001 - 속성/컨트롤 미지원이면 기본 동작 유지
+            ctrls["ScalerCrop"] = (0, 0, int(w), int(h))
+        except Exception:  # noqa: BLE001 - 속성 미지원이면 기본 동작 유지
             pass
+        # 화이트밸런스: 부스 조명 고정 → 수동 ColourGains(AWB off) 일관. AWB는 색 물체에 흔들려
+        # 흰 종이가 분홍/적색 캐스트됨(실측). gain≤0이면 auto. 현장 조명에 맞게 재보정.
+        v = self._cfg
+        if v.awb_red_gain > 0 and v.awb_blue_gain > 0:
+            ctrls["AwbEnable"] = False
+            ctrls["ColourGains"] = (v.awb_red_gain, v.awb_blue_gain)
+        if ctrls:
+            self._cam.set_controls(ctrls)
 
     def read_frame(self) -> Frame:  # pragma: no cover - Pi 전용
         import cv2  # type: ignore[import-not-found]

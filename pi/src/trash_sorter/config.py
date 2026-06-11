@@ -97,6 +97,10 @@ class VisionConfig:
     settle_seconds: float = field(default_factory=lambda: _f("TRASH_SETTLE_SEC", 0.5))
     # 움직임이 계속돼 정지하지 않을 때 강제 촬영까지의 최대 감지시간(초). 무한 대기 방지 안전장치.
     detect_max_seconds: float = field(default_factory=lambda: _f("TRASH_DETECT_MAX", 5.0))
+    # 화이트밸런스 수동 게인(red, blue). 둘 다 >0이면 AWB off + 고정(부스 조명 일관 색).
+    # 0이면 AWB auto. AWB는 색 물체에 흔들려 흰 종이가 분홍/적색됨(실측) → 고정 권장. 현장 재보정.
+    awb_red_gain: float = field(default_factory=lambda: _f("TRASH_AWB_RED_GAIN", 1.6))
+    awb_blue_gain: float = field(default_factory=lambda: _f("TRASH_AWB_BLUE_GAIN", 1.3))
 
 
 @dataclass(frozen=True)
