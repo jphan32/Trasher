@@ -36,6 +36,24 @@ def test_build_app_mock_wires_everything() -> None:
     assert ctx.ble is not None and ctx.photo_server is not None
 
 
+def test_component_mock_override(monkeypatch) -> None:
+    # 컴포넌트별 override: 미설정이면 전역 default, 설정되면 그 값. '모터만 제외'의 토대.
+    from trash_sorter.factory import _component_mock
+
+    monkeypatch.delenv("TRASH_MOCK_HARDWARE", raising=False)
+    assert _component_mock("TRASH_MOCK_HARDWARE", True) is True  # 미설정 → default(전역)
+    assert _component_mock("TRASH_MOCK_HARDWARE", False) is False
+
+    monkeypatch.setenv("TRASH_MOCK_HARDWARE", "1")
+    assert _component_mock("TRASH_MOCK_HARDWARE", False) is True  # override가 전역을 덮음
+    monkeypatch.setenv("TRASH_MOCK_HARDWARE", "0")
+    assert _component_mock("TRASH_MOCK_HARDWARE", True) is False
+
+    # 전역 mock=True여도 카메라만 실기기로 분리 계산됨(실 동작은 Pi에서 검증).
+    monkeypatch.setenv("TRASH_MOCK_CAMERA", "0")
+    assert _component_mock("TRASH_MOCK_CAMERA", True) is False
+
+
 def test_device_info_uses_advertised_ip(monkeypatch) -> None:
     monkeypatch.setenv("TRASH_ADVERTISED_IP", "10.1.2.3")
     di = device_info(load_settings(), http_port=9000)
