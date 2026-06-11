@@ -18,7 +18,7 @@
 | 4 | Pi Camera (CSI, v2/v3 또는 호환) + CSI 리본 | picamera2 |
 | 5 | 서보 ×3 (게이트1 + 분기 좌/우) | **SER0043**(DF9GMS, 360° 연속회전, 4.8–6V) — 양끝 하드스톱 필요 |
 | 6 | 벨트 모터 Wheeltec **MG310P20** ×2 + **드라이버**(Hiwonder 4ch I2C SA8870C, 또는 L298N류) | 컨베이어. 전력상 2채널 |
-| 7 | **서보·모터 전용 전원** — 서보 4.8–6V(SER0043×3 → 5V ≥3A) / 모터 12V(드라이버 VM, Hiwonder 5–15V) | Pi 5V 레일과 분리 |
+| 7 | **서보·모터 전용 전원** — 서보 4.8–6V(SER0043×3 → 5V ≥3A) / 모터 7.4V(MG310P20 7.4V판, 보드 VM 5–15V·≥5A) | Pi 5V 레일과 분리 |
 | 8 | 점퍼선, 공통 GND 배선 | |
 
 ⚠️ **서보·모터는 Pi 5V 레일에서 직접 급전하지 말 것** — 순간 전류로 Pi 언더볼트/리셋. 외부 전원 사용 + **Pi와 GND 공통**.
@@ -44,7 +44,7 @@
                                               IN2=GPIO24 ── DC 모터(벨트)
         │              │              │            │
         └──────────────┴──────┬───────┴────────────┘
-                    서보 4.8–6V 외부전원 / 모터 12V 외부전원
+                    서보 4.8–6V 외부전원 / 모터 7.4V 외부전원
                     (각 V+ ← 외부, GND ← 외부 ── Pi GND 공통)
 ```
 
@@ -369,7 +369,7 @@ uv run trash-sorter --simulate
 - [ ] `pi` ∈ `gpio,video,bluetooth,dialout`
 - [ ] WiFi = 인터넷 라우터, DHCP 예약, AP격리 OFF, **WiFi 절전 off**
 - [ ] 인터넷 도달(Gemini) 확인, 포트 8080 LAN 허용
-- [ ] 서보 3·모터1 **외부 전원** + Pi와 **공통 GND** (Pi 5V 직급전 금지)
+- [ ] 서보 3(4.8–6V)·벨트모터 2(7.4V, 보드 VM) **외부 전원** + Pi와 **공통 GND** (Pi 5V 직급전 금지)
 - [ ] 앱 설치(uv venv `--python /usr/bin/python3 --system-site-packages` + requirements-pi) / `install.sh`
 - [ ] `/etc/trash-sorter.env` (핀·임계값·`TRASH_GEMINI_CREDENTIALS`)
 - [ ] 비밀키 `/opt/trash-sorter/secret/` 배치(600), git 미커밋
