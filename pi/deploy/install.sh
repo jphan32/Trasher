@@ -37,7 +37,7 @@ echo "실행 사용자: $RUN_USER | uv: $UV"
 
 echo "[1/5] 코드 복사 → $APP_DIR (소유자 $RUN_USER)"
 mkdir -p "$APP_DIR"
-cp -rf "$PI_DIR"/{pyproject.toml,uv.lock,requirements-pi.txt,src} "$APP_DIR"/
+cp -rf "$PI_DIR"/{pyproject.toml,uv.lock,requirements-pi.txt,prompts.toml,src} "$APP_DIR"/
 # secret/(Gemini 키)이 있으면 함께 복사(없으면 건너뜀 — gitignore라 저장소엔 없음)
 [[ -d "$PI_DIR/secret" ]] && cp -rf "$PI_DIR/secret" "$APP_DIR"/ || true
 chown -R "$RUN_USER:$RUN_USER" "$APP_DIR"
