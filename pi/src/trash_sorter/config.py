@@ -65,7 +65,7 @@ class ServoConfig:
 class BeltConfig:
     run_seconds: float = field(default_factory=lambda: _f("TRASH_BELT_SECONDS", 3.0))  # §2.5 T_belt
 
-    # 벨트 드라이버: "gpiozero"(GPIO+L298N류, 현행 기본) | "hiwonder"(I2C 4ch SA8870C).
+    # 벨트 드라이버: "gpiozero"(GPIO+L298N류, 현행 기본) | "hiwonder"(I2C 4ch SA8339/SA8870C).
     # I2C 활성화·보드 배선 후 TRASH_BELT_DRIVER=hiwonder로 전환. docs/hardware.md.
     driver: str = field(default_factory=lambda: _s("TRASH_BELT_DRIVER", "gpiozero"))
 

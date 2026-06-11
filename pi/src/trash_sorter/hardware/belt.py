@@ -4,7 +4,7 @@
 폐루프(register 0x33)·엔코더 PPR(Hall vs GMR)은 belt 구동에 필요 없다.
 
 - ``GpiozeroBeltDriver``: 현행 GPIO + 모터드라이버(L298N/DRV8871류), gpiozero ``Motor``.
-- ``HiwonderBeltDriver``: Hiwonder 4채널 엔코더 모터 드라이버(SA8870C)를 I2C로 제어.
+- ``HiwonderBeltDriver``: Hiwonder 4채널 엔코더 모터 드라이버(SA8339/SA8870C)를 I2C로 제어.
   개루프 고정 PWM(register ``0x1f``, 채널별 -100..100)을 쓴다. 전력 한계로 2채널만 사용하며,
   두 모터가 서로 반대 방향을 보고 장착되므로 한 채널의 부호를 뒤집어 같은 선속도 방향을 만든다
   (``invert_a``/``invert_b``, config). 채널·주소·세기는 모두 ``BeltConfig``에서 조정.
@@ -20,7 +20,7 @@ from typing import Any
 
 from ..config import Settings
 
-# Hiwonder 4ch 보드(SA8870C) I2C 레지스터. 사용자 제공 + 공식 튜토리얼 기준:
+# Hiwonder 4ch 보드(SA8339/SA8870C) I2C 레지스터. 사용자 제공 + 공식 튜토리얼 기준:
 #   0x1f = 고정 PWM(개루프, 채널별 signed -100..100)  /  0x33 = 고정 속도(폐루프, 미사용)
 # ⚠️ 4채널 블록 레이아웃(0x1f에서 4 signed byte)은 표준 관례 — 실보드/공식 lib로 확정할 것:
 #   https://www.hiwonder.com/products/4-channel-encoder-motor-driver
@@ -65,7 +65,7 @@ class GpiozeroBeltDriver(BeltDriver):
 
 
 class HiwonderBeltDriver(BeltDriver):
-    """Hiwonder 4ch 엔코더 모터 드라이버(SA8870C)를 I2C 개루프 PWM으로 제어.
+    """Hiwonder 4ch 엔코더 모터 드라이버(SA8339/SA8870C)를 I2C 개루프 PWM으로 제어.
 
     ``bus``를 주입하면(테스트) smbus2를 import하지 않는다. None이면 첫 사용 시 지연 open.
     """
