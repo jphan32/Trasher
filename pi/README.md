@@ -17,6 +17,28 @@ uv run mypy           # 타입체크
 uv run pytest -q      # 테스트(전부 mock 기반)
 ```
 
+## E2E (HTTP 전구간 — Mac↔Pi WiFi)
+
+전체 분류 사이클 중 **사진 GET·분류 POST** 구간을 검증한다(BLE·서보/벨트·카메라·iPad는 제외 —
+실기기 의존, `trash-3ud`/`trash-83o`). E2E는 기본 실행에서 제외되며 `-m e2e`로 옵트인한다.
+
+```bash
+uv run pytest -m e2e        # Tier A(로컬): 실제 trash-sorter 엔트리포인트를 mock 모드로
+                            #   기동해 계약 검증(상시). Tier B(라이브)는 Pi 미도달 시 skip.
+```
+
+**라이브 Pi 검증**(`192.168.50.164` 등) — 접속 주소 단일 원천은 SSH 별칭 `rp4b`(`~/.ssh/config`):
+
+```bash
+# 저장소 루트에서. 서보/BLE/카메라/Gemini 없이 사진+분류 HTTP만 mock 모드로 띄운다.
+pi/scripts/e2e_pi.sh up                                          # 소스 동기화→venv→사진 시드→기동
+( cd pi && TRASH_PI_SEEDED_CYCLE=424242 uv run pytest -m e2e )   # 라이브 happy-path 포함
+pi/scripts/e2e_pi.sh down                                        # 정리(:8080 닫힘 확인)
+```
+
+주소가 바뀌면 `rp4b` 별칭만 고치면 된다(스크립트는 `ssh -G`로 자동 해석). 임시 override는
+`TRASH_PI_HOST=<ip> uv run pytest -m e2e`. 사진 디렉터리 고정은 `TRASH_PHOTO_DIR`.
+
 ## 실기기 (Raspberry Pi)
 
 ```bash

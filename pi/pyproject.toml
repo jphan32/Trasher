@@ -48,3 +48,9 @@ warn_unused_ignores = false
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+# E2E(HTTP 전구간)는 기본 실행에서 제외 — 느리고(서브프로세스 기동) 라이브 Pi 의존.
+# 실행: `uv run pytest -m e2e`. 라이브 타깃 미도달 시 개별 테스트가 skip된다.
+addopts = "-m 'not e2e'"
+markers = [
+    "e2e: 통신 경로(HTTP) 전구간 E2E. 기본 제외 — `uv run pytest -m e2e`로 실행.",
+]

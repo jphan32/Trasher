@@ -62,6 +62,9 @@ class NetworkConfig:
     http_port: int = field(default_factory=lambda: _i("TRASH_HTTP_PORT", 8080))
     photo_retention: int = field(default_factory=lambda: _i("TRASH_PHOTO_RETENTION", 20))
     advertised_ip: str = field(default_factory=lambda: _s("TRASH_ADVERTISED_IP", ""))
+    # 사진 저장 디렉터리. 빈 값이면 자동(mock=임시디렉터리 / 실기기=/var/tmp/trash-photos).
+    # 명시하면 고정 경로로 사진을 시드·검사할 수 있다(E2E·운영 디버깅). factory.build_app 참조.
+    photo_dir: str = field(default_factory=lambda: _s("TRASH_PHOTO_DIR", ""))
 
 
 @dataclass(frozen=True)

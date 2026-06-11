@@ -82,7 +82,11 @@ def build_app(settings: Settings | None = None, *, mock: bool | None = None) -> 
     settings = settings or load_settings()
     use_mock = use_mock_default() if mock is None else mock
 
-    photo_dir = tempfile.mkdtemp(prefix="trash-photos-") if use_mock else "/var/tmp/trash-photos"
+    # 사진 디렉터리: 명시(TRASH_PHOTO_DIR) > mock 임시디렉터리 > 실기기 기본(/var/tmp).
+    # 명시 경로는 E2E/운영에서 사진을 고정 위치에 시드·검사할 때 쓴다(config.photo_dir).
+    photo_dir = settings.network.photo_dir or (
+        tempfile.mkdtemp(prefix="trash-photos-") if use_mock else "/var/tmp/trash-photos"
+    )
     store = PhotoStore(photo_dir, retention=settings.network.photo_retention)
     # 분류기: SA 키 있으면 Gemini, 없으면 Mock(dev/sim). 사진서버 /classify에서 사용.
     classifier = build_classifier()
