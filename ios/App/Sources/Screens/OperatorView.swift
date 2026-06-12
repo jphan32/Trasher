@@ -5,14 +5,21 @@ import TrasherCore
 struct OperatorView: View {
     @EnvironmentObject var app: AppModel
     @Environment(\.dismiss) private var dismiss
+    @State private var showSettings = false
 
     var body: some View {
         ZStack {
             Color(hex: 0x14140F).ignoresSafeArea()
             VStack(alignment: .leading, spacing: 28) {
-                HStack {
+                HStack(spacing: 20) {
                     Text("운영자 정비").font(Theme.title(40)).foregroundStyle(.white)
                     Spacer()
+                    Button {
+                        showSettings = true
+                    } label: {
+                        Label("설정·튜닝", systemImage: "slider.horizontal.3")
+                            .font(Theme.body(22)).foregroundStyle(Theme.clay)
+                    }
                     Button("닫기") { dismiss() }
                         .font(Theme.body(24)).foregroundStyle(Theme.sprout)
                 }
@@ -29,6 +36,9 @@ struct OperatorView: View {
                 }
             }
             .padding(48)
+        }
+        .fullScreenCover(isPresented: $showSettings) {
+            SettingsView().environmentObject(app)
         }
     }
 

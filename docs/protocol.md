@@ -5,7 +5,7 @@ iPad 앱(BLE **Central**)과 Raspberry Pi 제어 프로그램(BLE **Peripheral**
 
 - `proto` 버전: **1**
 - 인코딩: 모든 특성(characteristic) 값은 **UTF-8 JSON**. 사진 같은 바이너리는 BLE로 보내지 않고 WiFi HTTP로 전송한다(아래 "사진 채널" 참조).
-- 통신 채널: ① 제어·상태·결과 = **BLE**(상시 연결) / ② 사진 = **로컬 WiFi HTTP**.
+- 통신 채널: ① 제어·상태·결과 = **BLE**(상시 연결) / ② 사진·분류·**런타임 설정** = **로컬 WiFi HTTP**. 런타임 설정 튜닝(`GET`/`PUT /config`)은 §8 참조 — BLE 계약 불변(`proto` 1 유지).
 
 ### 사진 채널 (HTTP)
 - **HTTP 서버는 Raspberry Pi에서 호스팅**한다. iPad는 클라이언트(GET pull). 이유: Pi는 상시 켜진 Linux로 견고하게 서버를 띄울 수 있는 반면, iOS 앱은 앱 생명주기(백그라운드/suspend)에 종속되어 서버 호스팅에 부적합하기 때문. 타이밍은 BLE `PhotoReady` 알림이 조율한다.
@@ -308,3 +308,54 @@ eco_points >= 50                             → lollipops = 2
 - **proto 1 = 동결 기준선.** Pi 레퍼런스 구현(`pi/`)이 모든 특성·상태·폴백 경로를 실제로 구동·검증했고(pytest 51, 통합/스모크 통과), codex 교차리뷰를 반영해 안정화됨.
 - Python 미러: `pi/src/trash_sorter/protocol.py` (검증됨). Swift 미러: `ios/.../Protocol.swift` (이 기준선에 맞춰 구현).
 - 이후 변경은 양쪽 미러 + 본 문서를 **동시에** 갱신하고 `proto`를 올린다.
+
+---
+
+## 8. 런타임 설정 튜닝 (HTTP `/config`)
+
+전시 현장에서 모터·카메라 **타이밍**(서보 이동/벨트 구동/정지 인정/타임아웃 등)을 운영자가 iPad에서 조정한다. 이 채널은 **BLE가 아니라 로컬 WiFi HTTP**다(사진·분류와 같은 Pi HTTP 서버). 자기서술적 스키마(min/max/step/label)가 BLE MTU(~180B)를 넘고, **운영자 전용 비실시간 조정**이라 HTTP가 적합하다. **BLE GATT 계약은 불변 → `proto`는 1 유지**(이 엔드포인트는 `proto` 버저닝 대상이 아닌 HTTP 부가 채널).
+
+- **운영자 전용**: iPad의 숨김 운영자 화면(롱프레스 진입)에서만 노출. 참여자 사이클 흐름과 무관하다.
+- **즉시 반영(HOT)**: Pi는 공유 설정 객체를 **in-place 변경**하고 모든 소비자(오케스트레이터·서보·벨트)가 **매 동작마다 live로 읽으므로 재시작 없이 즉시 적용**된다. 아래 §8.3 필드는 전부 HOT(핀·해상도 등 재시작 필요 값은 노출하지 않는다).
+- **영속화**: PUT은 JSON 파일(`TRASH_CONFIG_FILE`; 미설정 시 메모리에만 적용·비영속)에 저장돼 재시작 후에도 유지된다. 기동 시 env 기본값 **위에 overlay**(저장값 우선) → "불러오고 수정·적용"이 부팅을 넘어 지속.
+- **범위 강제**: PUT 값은 [min,max]로 **clamp**되며 응답이 clamp된 **실제 적용값**을 echo한다. 알 수 없는 키·비수치 값은 `400`.
+
+### 8.1 `GET /config`
+현재 튜닝값 + 메타데이터(스키마)를 함께 반환 → iPad가 폼을 **제네릭하게** 렌더(앱 업데이트 없이 필드 추가 가능).
+```json
+{
+  "fw": "0.1.0",
+  "fields": [
+    {"key":"belt_run_seconds","section":"belt","label":"벨트 구동 시간","unit":"s","type":"float","value":3.0,"min":0.5,"max":15.0,"step":0.1}
+  ]
+}
+```
+
+### 8.2 `PUT /config`
+**변경할 키만** 보낸다(부분 갱신). 값은 숫자.
+```json
+{ "belt_run_seconds": 2.5, "servo_travel_s": 0.9 }
+```
+응답(200) — clamp 후 **실제 적용값** + 영속 저장 여부:
+```json
+{ "ok": true, "applied": { "belt_run_seconds": 2.5, "servo_travel_s": 0.9 }, "persisted": true }
+```
+- `persisted`: 영속 파일 저장 성공 여부. `TRASH_CONFIG_FILE` 미설정(메모리 적용)이거나 저장 성공 시 `true`, **디스크 저장 실패 시 `false`**(값은 메모리에 적용됐으나 재시작 시 소실 — iPad가 경고 표시). 키 부재 시 iPad는 `true`로 간주(전방호환).
+- 알 수 없는 키 → `400 {"error":"unknown field: <key>"}` (부분 적용 없이 전체 거부) · 비수치 값 → `400` · 본문 과대(>1MB) → `413` · JSON 파싱 실패 → `400`.
+
+### 8.3 튜닝 필드 (단일 진실: Pi `config_manager.TUNABLES` ↔ iOS `PiConfig`)
+
+| key | 적용 대상(`section.attr`) | unit | 기본 | min | max | step | 의미 |
+|---|---|---|---|---|---|---|---|
+| `belt_run_seconds` | `belt.run_seconds` | s | 3.0 | 0.5 | 15.0 | 0.1 | 벨트 구동 시간(§2.5 T_belt) |
+| `servo_speed` | `servo.speed` | — | 0.3 | 0.05 | 1.0 | 0.05 | 서보 저속 구동 세기(0~1) |
+| `servo_travel_s` | `servo.travel_s` | s | 0.8 | 0.1 | 3.0 | 0.1 | 서보 이동 시간(하드스톱까지) |
+| `servo_rehome_s` | `servo.rehome_s` | s | 1.2 | 0.2 | 5.0 | 0.1 | 서보 재시팅(홈 복귀) 구동 시간 |
+| `vision_settle_seconds` | `vision.settle_seconds` | s | 0.5 | 0.0 | 5.0 | 0.1 | 정지 인정 무동작 지속(흔들림 방지) |
+| `vision_detect_max_seconds` | `vision.detect_max_seconds` | s | 5.0 | 1.0 | 30.0 | 0.5 | 강제 촬영까지 최대 감지 시간 |
+| `vision_motion_threshold` | `vision.motion_threshold` | — | 0.02 | 0.001 | 0.5 | 0.001 | 모션 감지 임계값(변화 픽셀 비율) |
+| `result_timeout_s` | `timing.result_timeout_s` | s | 15.0 | 3.0 | 60.0 | 1.0 | 분류 결과 대기 타임아웃(§6) |
+| `heartbeat_period_s` | `timing.heartbeat_period_s` | s | 2.0 | 0.5 | 5.0 | 0.5 | 상태 하트비트 주기(iPad stall 6s 미만 유지) |
+| `display_min_interval_s` | `display.min_interval_s` | s | 0.5 | 0.1 | 5.0 | 0.1 | 상태 OLED 최소 갱신 간격 |
+
+> 이 표를 바꾸면 Pi `config_manager.TUNABLES`·iOS `PiConfig` 모델·본 문서를 **함께** 갱신한다(수동 동기화, 프로토타입 단계). 필드 추가/삭제는 BLE 호환과 무관하므로 `proto` 불변 — iPad는 **모르는 키를 무시**하고 응답에 **빠진 키는 표시하지 않는다**(전방/후방 호환).

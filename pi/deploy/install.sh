@@ -41,6 +41,9 @@ cp -rf "$PI_DIR"/{pyproject.toml,uv.lock,requirements-pi.txt,prompts.toml,src} "
 # secret/(Gemini 키)이 있으면 함께 복사(없으면 건너뜀 — gitignore라 저장소엔 없음)
 [[ -d "$PI_DIR/secret" ]] && cp -rf "$PI_DIR/secret" "$APP_DIR"/ || true
 chown -R "$RUN_USER:$RUN_USER" "$APP_DIR"
+# 런타임 튜닝(PUT /config) 영속 상태 디렉터리 — RUN_USER가 써야 하므로 미리 생성·소유 부여.
+# env에서 TRASH_CONFIG_FILE=/var/lib/trash-sorter/runtime.json 활성화 시 사용. docs/protocol.md §8.
+mkdir -p /var/lib/trash-sorter && chown "$RUN_USER:$RUN_USER" /var/lib/trash-sorter
 
 echo "[2/5] 의존성 설치(system-site venv + uv sync --inexact + Pi 하드웨어 extras) — $RUN_USER로 실행"
 # venv/의존성은 서비스 실행 사용자로 생성해야 소유·권한이 맞는다(root venv 금지).

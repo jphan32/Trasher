@@ -2,6 +2,12 @@
 
 GPIO 핀·서보 구동·타이밍·임계값은 현장 튜닝 대상이라 한 곳에 모은다.
 docs/protocol.md §2.5(물리 제어), §6(타임아웃)와 연동.
+
+**런타임 튜닝(가변)**: 서보·벨트·비전·타이밍·디스플레이 sub-config는 ``frozen`` 이 아니다 —
+``config_manager.ConfigManager`` 가 iPad의 ``PUT /config`` 요청에 따라 **공유 인스턴스를
+in-place 변경**하면, 매 동작마다 ``self._s.<section>.<attr>`` 를 live로 읽는 소비자(오케스트레이터·
+서보·벨트)가 재시작 없이 즉시 반영한다(HOT). 변경 경로는 ConfigManager(화이트리스트 §8.3)뿐.
+핀·해상도 등 생성 시 캡처되는 값(REINIT)은 노출하지 않는다. docs/protocol.md §8.
 """
 
 from __future__ import annotations
@@ -38,7 +44,7 @@ def _x(name: str, default: int) -> int:
 
 # 기본값은 load_settings()/인스턴스 생성 시점에 env를 읽는다(import 시점 고정이 아님)
 # → default_factory 사용. 덕분에 런타임/테스트에서 env override가 반영된다.
-@dataclass(frozen=True)
+@dataclass  # 비-frozen: servo.speed/travel_s/rehome_s 런타임 튜닝(/config). 핀·dir은 미노출.
 class ServoConfig:
     """게이트 1 + 분기 2 서보. **SER0043(DF9GMS) = 360° 연속회전 서보**(위치제어 불가).
 
@@ -65,7 +71,7 @@ class ServoConfig:
     rehome_s: float = field(default_factory=lambda: _f("TRASH_REHOME_SEC", 1.2))
 
 
-@dataclass(frozen=True)
+@dataclass  # 비-frozen: belt.run_seconds 런타임 튜닝(/config). 드라이버·핀·i2c는 미노출(REINIT).
 class BeltConfig:
     run_seconds: float = field(default_factory=lambda: _f("TRASH_BELT_SECONDS", 3.0))  # §2.5 T_belt
 
@@ -89,7 +95,7 @@ class BeltConfig:
     invert_b: bool = field(default_factory=lambda: _b("TRASH_BELT_INVERT_B", True))
 
 
-@dataclass(frozen=True)
+@dataclass  # 비-frozen: settle/detect_max/motion_threshold 런타임 튜닝(/config). 해상도·awb 미노출.
 class VisionConfig:
     # 캡처 해상도. IMX219(Pi Cam v2)는 4:3 센서 → 4:3 풀-FOV 모드(1640×1232)로 화각 손실 방지.
     # 16:9(예 1280×720)는 센서를 크롭해 FOV↓. picamera2_impl이 ScalerCrop=전체로 풀-FOV 강제.
@@ -115,9 +121,12 @@ class NetworkConfig:
     # 사진 저장 디렉터리. 빈 값이면 자동(mock=임시디렉터리 / 실기기=/var/tmp/trash-photos).
     # 명시하면 고정 경로로 사진을 시드·검사할 수 있다(E2E·운영 디버깅). factory.build_app 참조.
     photo_dir: str = field(default_factory=lambda: _s("TRASH_PHOTO_DIR", ""))
+    # 런타임 튜닝(PUT /config) 영속 파일 경로. 빈 값이면 메모리에만 적용(비영속 — 테스트/개발 기본).
+    # 실기기 배포는 쓰기 가능 경로 지정(예 /var/lib/trash-sorter/runtime.json). docs/protocol.md §8.
+    config_file: str = field(default_factory=lambda: _s("TRASH_CONFIG_FILE", ""))
 
 
-@dataclass(frozen=True)
+@dataclass  # 비-frozen: result_timeout_s/heartbeat_period_s 런타임 튜닝(/config).
 class TimingConfig:
     result_timeout_s: float = field(default_factory=lambda: _f("TRASH_RESULT_TIMEOUT", 15.0))  # §6
     heartbeat_period_s: float = field(default_factory=lambda: _f("TRASH_HEARTBEAT", 2.0))
@@ -140,7 +149,7 @@ class ButtonConfig:
     long_press_s: float = field(default_factory=lambda: _f("TRASH_RESET_BTN_LONG", 0.8))
 
 
-@dataclass(frozen=True)
+@dataclass  # 비-frozen: min_interval_s 런타임 튜닝(/config). enabled·i2c·controller는 미노출.
 class DisplayConfig:
     """상태 표시용 I2C OLED(YWROBOT 12864 = 128×64, SSD1306/SH1106). docs/hardware.md "상태 OLED".
 
@@ -167,7 +176,7 @@ ROUTE_MAP: dict[WasteCategory, str] = {
 }
 
 
-@dataclass(frozen=True)
+@dataclass  # 비-frozen: sub-config가 가변(런타임 튜닝)이라 frozen은 의미가 없고 __hash__만 깨진다.
 class Settings:
     fw_version: str = "0.1.0"
     device_name: str = field(default_factory=lambda: _s("TRASH_DEVICE_NAME", "sorter-01"))

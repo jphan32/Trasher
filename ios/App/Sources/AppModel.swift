@@ -20,6 +20,8 @@ final class AppModel: ObservableObject {
     private let coordinator: SessionCoordinator
     private let central: BLECentral?      // 데모 모드에서는 nil
     private let demo: DemoDriver?          // 실 모드에서는 nil
+    private let isDemoMode: Bool           // 데모는 가짜 Pi(sentinel device) — /config 대상 아님
+    private let configService = PiConfigService()  // 운영자 설정 화면(GET/PUT /config, §8)
     private var heartbeatTask: Task<Void, Never>?
 
     /// demo=true(또는 --demo / TRASHER_DEMO=1)면 Pi 없이 자동 사이클 시연.
@@ -28,6 +30,7 @@ final class AppModel: ObservableObject {
         let useDemo = demoRequested
             || env.arguments.contains("--demo")
             || env.environment["TRASHER_DEMO"] == "1"
+        isDemoMode = useDemo
 
         model = screenModel(for: .disconnected)
         stats = Self.loadStats()
@@ -105,6 +108,23 @@ final class AppModel: ObservableObject {
     // 운영자(정비) 명령
     func operatorCommand(_ type: CommandType, arg: String? = nil) {
         coordinator.sendOperatorCommand(type, arg: arg)
+    }
+
+    // MARK: 운영자 런타임 설정(GET/PUT /config, docs/protocol.md §8)
+    /// 현재 연결된 Pi(데모/미연결 시 nil). 설정 화면이 연결 여부 안내에 사용.
+    var piDevice: DeviceInfo? { coordinator.device }
+
+    /// 현재 튜닝값+스키마 로드. 데모/미연결이면 `PiConfigError.notConnected`.
+    func loadConfig() async throws -> PiConfigSnapshot {
+        guard !isDemoMode, let device = coordinator.device else { throw PiConfigError.notConnected }
+        return try await configService.getConfig(on: device)
+    }
+
+    /// 변경분만 적용. 반환: 적용값 + 영속 여부. 데모/미연결이면 `PiConfigError.notConnected`.
+    @discardableResult
+    func applyConfig(_ changes: [String: Double]) async throws -> PiConfigApplyResult {
+        guard !isDemoMode, let device = coordinator.device else { throw PiConfigError.notConnected }
+        return try await configService.putConfig(changes, on: device)
     }
 
     // 포그라운드 복귀 시 스캔 재개(전시 무인운영). 이미 연결돼 있으면 no-op. 데모 모드는 no-op.

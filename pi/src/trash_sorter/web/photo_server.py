@@ -18,6 +18,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from ..classify import Classifier
+from ..config_manager import ConfigError, ConfigManager
 
 _PHOTO_RE = re.compile(r"/photos/(\d+)\.jpg")
 _CLASSIFY_RE = re.compile(r"/classify/(\d+)")
@@ -64,10 +65,19 @@ class PhotoStore:
 
 
 def _make_handler(
-    store: PhotoStore, classifier: Classifier | None
+    store: PhotoStore,
+    classifier: Classifier | None,
+    config_manager: ConfigManager | None = None,
 ) -> type[BaseHTTPRequestHandler]:
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
+            if self.path == "/config":
+                # GET /config — 현재 튜닝값 + 스키마(docs/protocol.md §8.1)
+                if config_manager is None:
+                    self._json(503, {"error": "config not available"})
+                    return
+                self._json(200, config_manager.snapshot())
+                return
             m = _PHOTO_RE.fullmatch(self.path)
             if not m:
                 self.send_error(404)
@@ -123,6 +133,40 @@ def _make_handler(
                 return
             self._json(200, result.to_dict())
 
+        def do_PUT(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
+            # PUT /config — 런타임 튜닝 적용(docs/protocol.md §8.2).
+            # do_POST와 동일하게 본문을 먼저 끝까지 소비해야 keep-alive 연결이 desync되지 않는다.
+            raw_len = self.headers.get("Content-Length")
+            try:
+                length = int(raw_len) if raw_len is not None else 0
+            except ValueError:
+                self.send_error(400)
+                return
+            if length < 0:
+                self.send_error(400)
+                return
+            if length > _MAX_BODY_BYTES:
+                self.send_error(413)
+                return
+            body = self.rfile.read(length) if length > 0 else b""
+            if self.path != "/config":
+                self.send_error(404)
+                return
+            if config_manager is None:
+                self._json(503, {"error": "config not available"})
+                return
+            try:
+                changes = json.loads(body) if body else {}
+            except json.JSONDecodeError:
+                self._json(400, {"error": "invalid JSON"})
+                return
+            try:
+                result = config_manager.apply(changes)
+            except ConfigError as e:
+                self._json(400, {"error": str(e)})
+                return
+            self._json(200, result)
+
         def _json(self, status: int, payload: dict) -> None:
             body = json.dumps(payload, ensure_ascii=False).encode()
             self.send_response(status)
@@ -148,9 +192,12 @@ class PhotoServer:
     def __init__(
         self, store: PhotoStore, port: int = 8080, host: str = "0.0.0.0",
         classifier: Classifier | None = None,
+        config_manager: ConfigManager | None = None,
     ) -> None:
         self._store = store
-        self._httpd = ThreadingHTTPServer((host, port), _make_handler(store, classifier))
+        self._httpd = ThreadingHTTPServer(
+            (host, port), _make_handler(store, classifier, config_manager)
+        )
         self._thread: threading.Thread | None = None
 
     @property

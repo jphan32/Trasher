@@ -19,6 +19,13 @@ def _post(url: str):
     )
 
 
+def _put(url: str, payload: dict):
+    data = json.dumps(payload).encode()
+    return urllib.request.urlopen(
+        urllib.request.Request(url, data=data, method="PUT"), timeout=2
+    )
+
+
 def test_store_path_and_url(tmp_path) -> None:
     store = PhotoStore(tmp_path / "photos", retention=3)
     assert store.path_for(42).name == "42.jpg"
@@ -157,6 +164,79 @@ def test_classify_without_classifier_503(tmp_path) -> None:
     try:
         with pytest.raises(urllib.error.HTTPError) as exc:
             _post(f"http://127.0.0.1:{server.port}/classify/1")
+        assert exc.value.code == 503
+    finally:
+        server.stop()
+
+
+# --- 런타임 설정 엔드포인트(docs/protocol.md §8) ----------------------------
+def _config_server(tmp_path):
+    from trash_sorter.config import Settings
+    from trash_sorter.config_manager import ConfigManager
+
+    settings = Settings()
+    cm = ConfigManager(settings)
+    store = PhotoStore(tmp_path / "photos")
+    server = PhotoServer(store, port=0, host="127.0.0.1", config_manager=cm)
+    return server, settings
+
+
+def test_get_config_returns_schema(tmp_path) -> None:
+    server, _ = _config_server(tmp_path)
+    server.start()
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{server.port}/config", timeout=2) as resp:
+            assert resp.status == 200
+            body = json.loads(resp.read())
+        belt = next(f for f in body["fields"] if f["key"] == "belt_run_seconds")
+        assert belt["value"] == 3.0 and belt["max"] == 15.0
+    finally:
+        server.stop()
+
+
+def test_put_config_applies_clamps_and_persists_to_settings(tmp_path) -> None:
+    server, settings = _config_server(tmp_path)
+    server.start()
+    try:
+        base = f"http://127.0.0.1:{server.port}/config"
+        with _put(base, {"belt_run_seconds": 999}) as resp:  # over max → clamp 15.0
+            assert resp.status == 200
+            body = json.loads(resp.read())
+        assert body["ok"] is True and body["applied"]["belt_run_seconds"] == 15.0
+        assert body["persisted"] is True  # 영속 경로 미설정 → 실패 아님
+        assert settings.belt.run_seconds == 15.0  # 공유 Settings에 즉시 반영(HOT)
+        # GET이 변경을 반영
+        with urllib.request.urlopen(base, timeout=2) as resp:
+            fields = json.loads(resp.read())["fields"]
+        belt = next(f for f in fields if f["key"] == "belt_run_seconds")
+        assert belt["value"] == 15.0
+    finally:
+        server.stop()
+
+
+def test_put_config_unknown_field_400(tmp_path) -> None:
+    server, settings = _config_server(tmp_path)
+    server.start()
+    try:
+        with pytest.raises(urllib.error.HTTPError) as exc:
+            _put(f"http://127.0.0.1:{server.port}/config", {"bogus": 1})
+        assert exc.value.code == 400
+        assert settings.belt.run_seconds == 3.0  # 거부 시 변경 없음
+    finally:
+        server.stop()
+
+
+def test_config_endpoints_503_without_manager(tmp_path) -> None:
+    store = PhotoStore(tmp_path / "photos")
+    server = PhotoServer(store, port=0, host="127.0.0.1")  # config_manager=None
+    server.start()
+    try:
+        base = f"http://127.0.0.1:{server.port}/config"
+        with pytest.raises(urllib.error.HTTPError) as exc:
+            urllib.request.urlopen(base, timeout=2)
+        assert exc.value.code == 503
+        with pytest.raises(urllib.error.HTTPError) as exc:
+            _put(base, {"belt_run_seconds": 2.0})
         assert exc.value.code == 503
     finally:
         server.stop()

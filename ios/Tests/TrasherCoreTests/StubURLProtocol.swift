@@ -23,3 +23,21 @@ func makeStubSession() -> URLSession {
     config.protocolClasses = [StubURLProtocol.self]
     return URLSession(configuration: config)
 }
+
+/// 요청 본문 추출. URLSession은 `httpBody`를 `httpBodyStream`으로 옮기므로 스트림도 읽는다(PUT/POST 본문 검증용).
+func stubRequestBody(_ request: URLRequest) -> Data {
+    if let body = request.httpBody { return body }
+    guard let stream = request.httpBodyStream else { return Data() }
+    stream.open()
+    defer { stream.close() }
+    var data = Data()
+    let size = 4096
+    let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: size)
+    defer { buffer.deallocate() }
+    while stream.hasBytesAvailable {
+        let read = stream.read(buffer, maxLength: size)
+        if read <= 0 { break }
+        data.append(buffer, count: read)
+    }
+    return data
+}

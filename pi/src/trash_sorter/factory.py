@@ -15,6 +15,7 @@ from .app import Orchestrator
 from .ble.base import BleServer
 from .classify import build_classifier
 from .config import Settings, load_settings
+from .config_manager import ConfigManager
 from .hardware.base import HardwareController
 from .hardware.button import ButtonInput
 from .hardware.display import StatusDisplay
@@ -65,6 +66,7 @@ class AppContext:
     camera: Camera
     button: ButtonInput | None = None
     display: StatusDisplay | None = None
+    config_manager: ConfigManager | None = None
 
 
 def _build_hardware(settings: Settings, mock: bool) -> HardwareController:
@@ -148,7 +150,13 @@ def build_app(settings: Settings | None = None, *, mock: bool | None = None) -> 
     store = PhotoStore(photo_dir, retention=settings.network.photo_retention)
     # 분류기: SA 키 있으면 Gemini, 없으면 Mock(dev/sim). 사진서버 /classify에서 사용.
     classifier = build_classifier()
-    photo_server = PhotoServer(store, port=settings.network.http_port, classifier=classifier)
+    # 런타임 튜닝(GET/PUT /config). 저장된 오버라이드를 컴포넌트 생성 **전에** overlay(저장값 우선).
+    config_manager = ConfigManager(settings, persist_path=settings.network.config_file or None)
+    config_manager.load_persisted()
+    photo_server = PhotoServer(
+        store, port=settings.network.http_port, classifier=classifier,
+        config_manager=config_manager,
+    )
 
     hardware = _build_hardware(settings, mock_hw)
     camera = _build_camera(settings, mock_cam)
@@ -163,6 +171,8 @@ def build_app(settings: Settings | None = None, *, mock: bool | None = None) -> 
         camera=camera,
         motion=MotionDetector(
             threshold=settings.vision.motion_threshold,
+            # motion_threshold를 HOT으로: PUT /config의 in-place 변경을 매 프레임 live 반영.
+            threshold_provider=lambda: settings.vision.motion_threshold,
         ),
         hardware=hardware,
         ble=ble,
@@ -180,6 +190,7 @@ def build_app(settings: Settings | None = None, *, mock: bool | None = None) -> 
         camera=camera,
         button=button,
         display=display,
+        config_manager=config_manager,
     )
 
 

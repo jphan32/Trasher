@@ -58,7 +58,8 @@ public final class SessionCoordinator {
     private let stallThreshold: TimeInterval
     private let resultDeadline: TimeInterval
 
-    private var device: DeviceInfo?
+    /// 현재 연결된 Pi(없으면 nil). 운영자 설정 화면(PiConfigService)이 ip:port를 도출하는 데 쓴다.
+    public private(set) var device: DeviceInfo?
     private var prevPiState: PiState?
     private var lastSeq: Int?
     private var lastSeqAt: Date?

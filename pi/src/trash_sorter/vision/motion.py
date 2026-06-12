@@ -6,16 +6,30 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import numpy as np
 
 from .base import Frame
 
 
 class MotionDetector:
-    def __init__(self, threshold: float = 0.02, pixel_delta: int = 25) -> None:
-        """threshold: 변화로 칠 픽셀 비율. pixel_delta: 픽셀당 변화 인정 최소 차(0-255)."""
+    def __init__(
+        self,
+        threshold: float = 0.02,
+        pixel_delta: int = 25,
+        *,
+        threshold_provider: Callable[[], float] | None = None,
+    ) -> None:
+        """threshold: 변화로 칠 픽셀 비율. pixel_delta: 픽셀당 변화 인정 최소 차(0-255).
+
+        threshold_provider: 주어지면 ``is_motion`` 이 매번 이 콜백으로 임계값을 **live** 조회한다
+        (런타임 튜닝 ``PUT /config`` 의 ``vision.motion_threshold`` in-place 변경을 즉시 반영, HOT).
+        미지정이면 생성 시 ``threshold`` 고정값 사용(tuning.py CLI 등). docs/protocol.md §8.
+        """
         self._threshold = threshold
         self._pixel_delta = pixel_delta
+        self._threshold_provider = threshold_provider
         self._prev: np.ndarray | None = None
 
     def reset(self) -> None:
@@ -33,4 +47,5 @@ class MotionDetector:
         return float(changed) / float(cur.size)
 
     def is_motion(self, frame: Frame) -> bool:
-        return self.changed_ratio(frame) > self._threshold
+        threshold = self._threshold_provider() if self._threshold_provider else self._threshold
+        return self.changed_ratio(frame) > threshold
