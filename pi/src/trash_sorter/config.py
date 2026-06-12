@@ -59,6 +59,10 @@ class ServoConfig:
     gate_dir: int = field(default_factory=lambda: _i("TRASH_GATE_DIR", 1))
     left_dir: int = field(default_factory=lambda: _i("TRASH_LEFT_DIR", 1))
     right_dir: int = field(default_factory=lambda: _i("TRASH_RIGHT_DIR", 1))
+    # 리셋 버튼 '길게-클릭' 재시팅 구동 시간(초). 게이트·분기를 닫힘/중앙 하드스톱으로 다시
+    # 안착시키는 시간 — travel_s보다 길게 잡아 드리프트/잼 뒤에도 확실히 재시팅. 3축 동시 구동이라
+    # 이 시간 동안 최악 동시 스톨 전류(~2.5A@5V)가 흐른다(docs/hardware.md 전원 주의).
+    rehome_s: float = field(default_factory=lambda: _f("TRASH_REHOME_SEC", 1.2))
 
 
 @dataclass(frozen=True)
@@ -119,6 +123,42 @@ class TimingConfig:
     heartbeat_period_s: float = field(default_factory=lambda: _f("TRASH_HEARTBEAT", 2.0))
 
 
+@dataclass(frozen=True)
+class ButtonConfig:
+    """물리 리셋 버튼(모멘터리 푸시). 짧게=detach-홈 / 길게=타이머 재시팅(서보 홈 복귀).
+
+    배선: 버튼 한쪽 GPIO(pull_up 기준) ↔ 다른 쪽 GND. 눌림=LOW. docs/hardware.md "리셋 버튼".
+    디바운스(채터링 방지)·짧게/길게 판정은 PressDetector(순수 로직, clock 주입)가 폴링으로 처리.
+    """
+
+    enabled: bool = field(default_factory=lambda: _b("TRASH_RESET_BTN", True))
+    pin: int = field(default_factory=lambda: _i("TRASH_RESET_BTN_PIN", 25))  # BCM25(물리22)
+    # pull_up=True: 내부 풀업, 버튼=GPIO↔GND, 눌림=LOW(gpiozero 기본). False면 외부 풀다운.
+    pull_up: bool = field(default_factory=lambda: _b("TRASH_RESET_BTN_PULLUP", True))
+    # debounce_s: 채터링 무시 창(초). long_press_s: 짧게/길게 경계(초).
+    debounce_s: float = field(default_factory=lambda: _f("TRASH_RESET_BTN_DEBOUNCE", 0.04))
+    long_press_s: float = field(default_factory=lambda: _f("TRASH_RESET_BTN_LONG", 0.8))
+
+
+@dataclass(frozen=True)
+class DisplayConfig:
+    """상태 표시용 I2C OLED(YWROBOT 12864 = 128×64, SSD1306/SH1106). docs/hardware.md "상태 OLED".
+
+    YWROBOT 0.96" 128×64는 보통 SSD1306(0x3C). 제어칩이 SH1106면 ``controller=sh1106``(2px 오프셋
+    보정). i2cdetect로 주소 확인. 없거나 I2C 미활성이면 factory가 graceful fallback(표시 없이 진행).
+    """
+
+    enabled: bool = field(default_factory=lambda: _b("TRASH_OLED", True))
+    i2c_bus: int = field(default_factory=lambda: _i("TRASH_OLED_I2C_BUS", 1))
+    i2c_addr: int = field(default_factory=lambda: _x("TRASH_OLED_I2C_ADDR", 0x3C))
+    controller: str = field(default_factory=lambda: _s("TRASH_OLED_CONTROLLER", "ssd1306"))
+    width: int = field(default_factory=lambda: _i("TRASH_OLED_WIDTH", 128))
+    height: int = field(default_factory=lambda: _i("TRASH_OLED_HEIGHT", 64))
+    rotate: int = field(default_factory=lambda: _i("TRASH_OLED_ROTATE", 0))  # luma 0..3(×90°)
+    # 최소 갱신 간격(초). I2C 트래픽 보호 + 스피너 애니메이션 주기. 상태 변화는 즉시 그린다.
+    min_interval_s: float = field(default_factory=lambda: _f("TRASH_OLED_MIN_INTERVAL", 0.5))
+
+
 # pet/can/other → 분기 경로. §2.5 기본 매핑(물리 배치에 맞게 조정).
 ROUTE_MAP: dict[WasteCategory, str] = {
     WasteCategory.PET: "left",     # 분기서보 좌 열림
@@ -136,6 +176,8 @@ class Settings:
     vision: VisionConfig = field(default_factory=VisionConfig)
     network: NetworkConfig = field(default_factory=NetworkConfig)
     timing: TimingConfig = field(default_factory=TimingConfig)
+    button: ButtonConfig = field(default_factory=ButtonConfig)
+    display: DisplayConfig = field(default_factory=DisplayConfig)
 
 
 def load_settings() -> Settings:

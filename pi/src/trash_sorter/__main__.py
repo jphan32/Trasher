@@ -38,9 +38,17 @@ def main() -> None:
     ctx = build_app(settings)
 
     ctx.photo_server.start()
-    ctx.ble.set_device_info(device_info(settings, ctx.photo_server.port))
+    di = device_info(settings, ctx.photo_server.port)
+    ctx.ble.set_device_info(di)
+    ctx.orchestrator.set_device_info(ip=di.ip, name=di.name)  # OLED 헤더용(IP 확정 후)
     ctx.ble.start()
-    log.info("시작됨: HTTP :%d, BLE %s", ctx.photo_server.port, settings.device_name)
+    log.info(
+        "시작됨: HTTP :%d, BLE %s, 버튼=%s, OLED=%s",
+        ctx.photo_server.port,
+        settings.device_name,
+        "on" if ctx.button else "off",
+        "on" if ctx.display else "off",
+    )
 
     try:
         ctx.orchestrator.run()
@@ -53,6 +61,10 @@ def main() -> None:
         ctx.hardware.stop_all()
         ctx.camera.close()
         ctx.hardware.close()
+        if ctx.display is not None:
+            ctx.display.close()
+        if ctx.button is not None:
+            ctx.button.close()
 
 
 if __name__ == "__main__":

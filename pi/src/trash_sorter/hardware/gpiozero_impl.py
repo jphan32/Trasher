@@ -51,15 +51,16 @@ class GpiozeroHardware(HardwareController):
         self.set_gate(open=False)
         self.set_route("center")
 
-    def _move(self, moves: list[tuple[object, float]]) -> None:
-        """(servo, signed_speed) 쌍들을 동시에 저속 구동 → travel_s 후 함께 정지(detach).
+    def _move(self, moves: list[tuple[object, float]], *, duration: float | None = None) -> None:
+        """(servo, signed_speed) 쌍들을 동시에 저속 구동 → ``duration`` 후 함께 정지(detach).
 
+        ``duration`` 미지정이면 travel_s(기본 이동 시간). 재시팅(home reseat)은 rehome_s로 더 길게.
         하드스톱이 최대 이동 위치를 제한하므로 시간이 다소 길어도 안전(스톱에 닿아 멈춤).
         정지는 value=None(무신호) — 연속서보 중립 creep과 홀딩 전류를 피한다.
         """
         for servo, val in moves:
             servo.value = _clamp(val)  # type: ignore[attr-defined]
-        self._sleep(self._s.servo.travel_s)
+        self._sleep(self._s.servo.travel_s if duration is None else duration)
         for servo, _ in moves:
             servo.value = None  # type: ignore[attr-defined]
 
@@ -85,6 +86,21 @@ class GpiozeroHardware(HardwareController):
         self._belt.stop()
         for servo in (self._gate, self._left, self._right):
             servo.value = None
+
+    def home(self, *, reseat: bool) -> None:
+        # 리셋 버튼 홈 복귀. 짧게=detach(위치 유지) / 길게=닫힘·중앙 rehome_s 구동 후 재시팅.
+        s = self._s.servo
+        if not reseat:
+            for servo in (self._gate, self._left, self._right):
+                servo.value = None  # 무신호 — 연속서보 정지, 현재 위치를 홈으로
+            return
+        # 닫힘(게이트)·중앙(분기) 방향 = 각 *_dir의 반대 부호로 동시 구동 → 하드스톱 재시팅.
+        moves = [
+            (self._gate, _sign(s.gate_dir) * -1 * s.speed),
+            (self._left, _sign(s.left_dir) * -1 * s.speed),
+            (self._right, _sign(s.right_dir) * -1 * s.speed),
+        ]
+        self._move(moves, duration=s.rehome_s)
 
     def close(self) -> None:  # pragma: no cover - Pi 전용
         for dev in (self._gate, self._left, self._right):

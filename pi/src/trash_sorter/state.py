@@ -41,6 +41,16 @@ class StateMachine:
         """sorting 진입 시 구동할 카테고리(오케스트레이터가 읽음)."""
         return self._pending_sort
 
+    @property
+    def err(self) -> ErrorCode | None:
+        """현재 에러 코드(없으면 None). seq를 올리지 않는 조회 — OLED 등 로컬 표시용."""
+        return self._err
+
+    @property
+    def last_sort(self) -> WasteCategory | None:
+        """이번 cycle의 분류 결과(sorting 중에만 set). seq 불변 조회 — OLED 표시용."""
+        return self._last_sort
+
     def snapshot(self) -> Status:
         """현재 상태의 Status 페이로드. 하트비트로 호출될 때마다 seq +1."""
         self._seq += 1

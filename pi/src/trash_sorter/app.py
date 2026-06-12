@@ -8,6 +8,7 @@ docs/protocol.md §2(상태머신), §2.1(게이팅), §2.5(sort), §6(타임아
 
 from __future__ import annotations
 
+import logging
 import queue
 import time
 from collections.abc import Callable
@@ -15,6 +16,8 @@ from collections.abc import Callable
 from .ble.base import BleServer
 from .config import Settings
 from .hardware.base import HardwareController
+from .hardware.button import ButtonEvent, ButtonInput, PressDetector
+from .hardware.display import DisplaySnapshot, StatusDisplay
 from .hardware.sorter import Sorter
 from .protocol import (
     ClassificationResult,
@@ -31,6 +34,11 @@ from .vision.base import Camera
 from .vision.motion import MotionDetector
 from .web.photo_server import PhotoStore
 
+log = logging.getLogger(__name__)
+
+# 디스플레이 렌더가 연속 N회 실패하면(예: 운영 중 OLED 탈락) 비활성화해 로그 스팸·루프 지연 방지.
+_DISPLAY_MAX_FAILS = 5
+
 
 class Orchestrator:
     def __init__(
@@ -45,6 +53,8 @@ class Orchestrator:
         *,
         clock: Callable[[], float] = time.monotonic,
         sleep: Callable[[float], None] = time.sleep,
+        button: ButtonInput | None = None,
+        display: StatusDisplay | None = None,
     ) -> None:
         self._s = settings
         self._sm = state
@@ -72,6 +82,23 @@ class Orchestrator:
         self._last_heartbeat = 0.0
         self._running = False
 
+        # 물리 리셋 버튼(옵션) — None이면 폴링 no-op. PressDetector는 항상 두되 입력만 없을 뿐.
+        self._button = button
+        self._press = PressDetector(
+            debounce_s=settings.button.debounce_s, long_press_s=settings.button.long_press_s
+        )
+        # 상태 OLED(옵션) — None이면 렌더 no-op. 레이트리밋·스피너·연속실패 카운트.
+        self._display = display
+        self._last_display_snap: DisplaySnapshot | None = None
+        self._last_display_at = float("-inf")
+        self._spinner = 0
+        self._display_fails = 0
+        # OLED 헤더에 표시할 장치 식별자(IP는 HTTP 시작 후 set_device_info로 갱신).
+        self._dev_ip = settings.network.advertised_ip
+        self._dev_name = settings.device_name
+        # Central(iPad) 연결 추정 — connect 훅이 없어 inbound 트래픽/disconnect로 best-effort 추적.
+        self._central_active = False
+
     # --- 생명주기 ----------------------------------------------------------
     def run(self, poll_interval: float = 0.02) -> None:  # pragma: no cover - 무한루프
         self._running = True
@@ -82,14 +109,21 @@ class Orchestrator:
     def stop_running(self) -> None:
         self._running = False
 
+    def set_device_info(self, *, ip: str, name: str) -> None:
+        """OLED 헤더에 표시할 장치 IP/이름 갱신. __main__이 HTTP 시작 후(IP 확정) 1회 호출."""
+        self._dev_ip = ip
+        self._dev_name = name
+
     # --- 한 사이클 반복 -----------------------------------------------------
     def tick(self) -> None:
         self._drain_disconnects()
         self._drain_commands()
         self._drain_results()
+        self._poll_button()  # 물리 리셋 버튼(항상 오버라이드) — 상태 전개 전에 처리
         self._advance_manual_sort()
         self._advance_state()
         self._maybe_heartbeat()
+        self._update_display()  # 마지막: 이 tick의 최종 상태를 반영
 
     def _advance_manual_sort(self) -> None:
         """논블로킹 수동 SORT: T_belt 경과 시 finish. 루프를 막지 않아 estop이 매 tick 처리됨."""
@@ -110,6 +144,29 @@ class Orchestrator:
         self._sort_since = None
         self._manual_sort_since = None
 
+    # --- 물리 리셋 버튼 ------------------------------------------------------
+    def _poll_button(self) -> None:
+        """매 tick 버튼 raw 상태를 읽어 디바운스·짧게/길게 판정 → 이벤트 처리. 버튼 없으면 no-op."""
+        if self._button is None:
+            return
+        event = self._press.update(self._button.is_pressed(), self._clock())
+        if event is not None:
+            self._handle_button(event)
+
+    def _handle_button(self, event: ButtonEvent) -> None:
+        """리셋 버튼 처리 — **항상(오버라이드)**: 어느 상태든 진행 정지 → 서보 홈 → idle.
+
+        짧게(SHORT)=detach-홈(현재 위치를 홈으로), 길게(LONG)=타이머 재시팅(하드스톱 복귀).
+        E-STOP과 별개의 정비/캘리브레이션용 물리 버튼이라 ERROR/MAINTENANCE/사이클 중에도 동작한다.
+        """
+        self._abort_active_sort()  # 진행 중 벨트/서보 즉시 정지(있을 때만 stop_all)
+        self._hw.home(reseat=(event is ButtonEvent.LONG))
+        self._sm.reset()  # → idle (started 유지 — RESET 명령과 동일 시맨틱)
+        self._reset_timers()
+        kind = "재시팅" if event is ButtonEvent.LONG else "detach"
+        log.info("리셋 버튼: %s → 서보 홈(%s)", event.value, kind)
+        self._publish_status()
+
     def _drain_disconnects(self) -> None:
         had = False
         while True:
@@ -123,6 +180,7 @@ class Orchestrator:
 
     def _handle_disconnect(self) -> None:
         """§6 BLE 끊김: 진행 중 사이클을 안전 정리. iPad 재연결 시 start로 재개."""
+        self._central_active = False  # OLED 연결 표시 갱신
         self._hw.stop_all()
         self._sort_since = None
         self._manual_sort_since = None
@@ -145,10 +203,12 @@ class Orchestrator:
                 res = self._results.get_nowait()
             except queue.Empty:
                 return
+            self._central_active = True  # iPad가 결과를 보냄 → 연결 중(OLED 표시)
             if self._sm.result(res.cycle, res.category):  # cycle 불일치는 폐기
                 self._publish_status()
 
     def _handle_command(self, cmd: Command) -> None:
+        self._central_active = True  # iPad가 명령을 보냄 → 연결 중(OLED 표시)
         ok = True
         err: ErrorCode | None = None
         try:
@@ -302,6 +362,44 @@ class Orchestrator:
     def _maybe_heartbeat(self) -> None:
         if self._clock() - self._last_heartbeat >= self._s.timing.heartbeat_period_s:
             self._publish_status()
+
+    # --- 상태 OLED ----------------------------------------------------------
+    def _build_display_snapshot(self) -> DisplaySnapshot:
+        """현재 상태를 OLED 프레임으로. seq를 올리지 않는 조회만 사용(snapshot() 부작용 회피)."""
+        return DisplaySnapshot(
+            state=self._sm.state,
+            cycle=self._sm.cycle,
+            started=self._sm.started,
+            err=self._sm.err,
+            last_sort=self._sm.last_sort,
+            ble_connected=self._central_active,
+            ip=self._dev_ip,
+            name=self._dev_name,
+        )
+
+    def _update_display(self) -> None:
+        """OLED 갱신. 상태 변화는 즉시, 무변화 시 min_interval마다 그린다(스피너·I2C 보호)."""
+        if self._display is None:
+            return
+        now = self._clock()
+        snap = self._build_display_snapshot()
+        changed = snap != self._last_display_snap
+        due = now - self._last_display_at >= self._s.display.min_interval_s
+        if not changed and not due:
+            return
+        self._spinner = (self._spinner + 1) & 3
+        # 성공·실패 무관하게 레이트리밋 기준(snap/at)을 먼저 갱신 — 실패해도 다음 tick에 즉시
+        # 재시도하지 않도록(I2C 트래픽 보호). 다음 시도는 min_interval 경과 후.
+        self._last_display_snap = snap
+        self._last_display_at = now
+        try:
+            self._display.render(snap, spinner=self._spinner)
+            self._display_fails = 0
+        except Exception as e:  # noqa: BLE001 - 디스플레이 오류는 비치명(루프 계속)
+            self._display_fails += 1
+            if self._display_fails >= _DISPLAY_MAX_FAILS:
+                log.warning("OLED 렌더 %d회 연속 실패 — 비활성화: %s", self._display_fails, e)
+                self._display = None
 
 
 def _truthy(arg: str | None) -> bool:

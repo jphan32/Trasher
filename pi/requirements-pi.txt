@@ -19,3 +19,4 @@ opencv-python-headless
 gpiozero
 bless
 smbus2  # Hiwonder 4ch 모터 드라이버(SA8870C) I2C 제어 — 벨트(TRASH_BELT_DRIVER=hiwonder)
+luma.oled  # 상태 표시 OLED(SSD1306/SH1106, I2C) — luma.core·Pillow 의존. docs/hardware.md "상태 OLED"

@@ -31,3 +31,9 @@ class MockHardware(HardwareController):
         self.belt_on = False
         self.gate_open = False
         self.calls.append("stop_all")
+
+    def home(self, *, reseat: bool) -> None:
+        # 짧게=detach(구동 없음) / 길게=재시팅 구동 — 어느 쪽이든 논리 상태는 홈(게이트 닫힘+중앙).
+        self.gate_open = False
+        self.route = "center"
+        self.calls.append(f"home:{'reseat' if reseat else 'detach'}")

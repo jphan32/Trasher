@@ -75,9 +75,17 @@ systemctl daemon-reload
 systemctl enable --now bt-agent
 systemctl restart bluetooth
 
+echo "[4c/5] I2C 활성화(상태 OLED용) + i2c-tools"
+# 상태 OLED는 I2C1(GPIO2/3, 주소 0x3C). dtparam=i2c_arm=on 활성화 — /dev/i2c-1은 재부팅 후 생성.
+# 미활성/미배선이어도 앱은 graceful fallback(표시 없이 정상 동작)이라 설치는 실패하지 않는다.
+raspi-config nonint do_i2c 0 2>/dev/null || echo "  ⚠ raspi-config do_i2c 실패 — 수동: /boot/firmware/config.txt 에 dtparam=i2c_arm=on"
+apt-get install -y i2c-tools >/dev/null 2>&1 || echo "  ⚠ i2c-tools 설치 실패 — 수동: apt install i2c-tools"
+
 echo "[5/5] 서비스 시작"
 systemctl restart "$SERVICE"
 
 echo
 echo "완료. 상태: systemctl status trash-sorter | 로그: journalctl -u trash-sorter -f"
 echo "참고: 서보는 lgpio 기본 팩토리로 동작(Trixie엔 pigpio 데몬 없음). PWMSoftwareFallback 경고는 무시."
+echo "참고: 상태 OLED는 I2C 활성화 후 **재부팅**해야 표시됨(그 전까지 표시 없이 정상 동작). i2cdetect -y 1로 0x3C 확인."
+echo "참고: 리셋 버튼(GPIO25↔GND) — 짧게=detach-홈 / 길게=재시팅. 미배선이어도 무해."

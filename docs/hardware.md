@@ -14,6 +14,8 @@ Raspberry Pi 물리 구성 레퍼런스. GPIO 핀은 `pi/src/trash_sorter/config
 | 4 | 분기 서보 ×2 (좌/우) — **SER0043** | 경로 분기: 좌 열림=좌, 우 열림=우, 둘 다 닫힘=중앙 |
 | 5 | 벨트 모터 — Wheeltec MG310P20 ×2 + 드라이버(Hiwonder 4ch I2C SA8870C, 또는 L298N류) | 컨베이어 구동(시간 기반). 전력상 2채널. **hiwonder I2C는 Pi 직결**(공식 RPi 키트 사례, smbus2·0x34) |
 | 6 | 외부 전원 — 서보 **4.8–6V**(5V ≥3A) + 모터 **7.4V**(MG310P20 7.4V판, 보드 VM 5–15V·≥5A) | 서보·모터 전류(Pi 5V 레일과 분리, **공통 GND 필수**) |
+| 7 | **물리 리셋 버튼 ×1** (모멘터리 푸시, NO) | 서보 홈 복귀. 짧게=detach-홈 / 길게=타이머 재시팅. GPIO↔버튼↔GND(내부 풀업) |
+| 8 | **상태 OLED — YWROBOT 12864 I2C**(0.96" 128×64, SSD1306, 0x3C, VCC 3.3–5V) | Pi 동작 상태 표시(운영자용). I2C1(GPIO2/3) — Hiwonder 벨트와 버스 공유 가능(주소 0x3C≠0x34) |
 
 ## GPIO 핀맵 (BCM, config.py 기본값)
 
@@ -26,7 +28,11 @@ Raspberry Pi 물리 구성 레퍼런스. GPIO 핀은 `pi/src/trash_sorter/config
 | 벨트 IN2 *(driver=gpiozero)* | **GPIO24** | 18 | `backward_pin` / `TRASH_BELT_BWD_PIN` | 모터드라이버 IN2 |
 | 벨트 I2C SDA *(driver=hiwonder)* | **GPIO2** | 3 | `i2c_addr` / `TRASH_BELT_I2C_ADDR` | I2C1 SDA, 보드 기본 `0x34` |
 | 벨트 I2C SCL *(driver=hiwonder)* | **GPIO3** | 5 | `i2c_bus` / `TRASH_BELT_I2C_BUS` | I2C1 SCL, bus `1` |
+| **리셋 버튼** | **GPIO25** | 22 | `pin` / `TRASH_RESET_BTN_PIN` | 모멘터리 NO, 반대쪽 GND. 내부 풀업(눌림=LOW) |
+| **OLED I2C SDA** | **GPIO2** | 3 | `i2c_addr` / `TRASH_OLED_I2C_ADDR` | I2C1 SDA, `0x3C`. SDA는 GPIO2 공용(버스) |
+| **OLED I2C SCL** | **GPIO3** | 5 | `i2c_bus` / `TRASH_OLED_I2C_BUS` | I2C1 SCL, bus `1`. SCL는 GPIO3 공용(버스) |
 | 로직 GND(공통) | GND | 6·9·14·20·25·30·34·39 | — | **외부 전원 GND와 공통 필수** |
+| OLED VCC(3.3V) | 3V3 | 1·17 | — | OLED 전원(~20mA, Pi 3.3V 레일) |
 
 > 서보(연속회전) 기본값: 저속 `speed` 0.3, 이동시간 `travel_s` 0.8s, 방향 `*_dir` ±1 — 하드스톱까지 구동 후 정지. 벨트 `T_belt` 3.0s.
 > (`TRASH_SERVO_SPEED`/`TRASH_SERVO_TRAVEL`, `TRASH_GATE_DIR`/`TRASH_LEFT_DIR`/`TRASH_RIGHT_DIR`, `TRASH_BELT_SECONDS`로 보정.)
@@ -89,10 +95,34 @@ CSI 리본을 Pi 카메라 포트에 연결. picamera2로 인식(실기기). 캡
   틀어진다**(IR 오염, 소프트로 완전 보정 불가) → **IR 필터 있는 일반 카메라 사용**. 색 캐스트 잔존 시에만
   수동 ColourGains 고정(흰 A4를 화면 채워 중앙 R≈G≈B 되는 red/blue 게인).
 
+### 리셋 버튼 (서보 홈 복귀, 모멘터리 푸시)
+```
+버튼 단자 A ── GPIO25 (물리 22핀)
+버튼 단자 B ── GND     (Pi 어느 GND핀이든)
+```
+- **모멘터리 NO(normally-open) 푸시버튼 1개**. 한쪽을 GPIO25, 다른 한쪽을 GND에 연결. gpiozero `Button`이 **내부 풀업**을 켜므로(`pull_up=True` 기본) 평상시 HIGH, **눌림=LOW** — 외부 저항 불필요.
+- **디바운스(채터링 방지)는 소프트웨어**(`PressDetector`)가 처리(기본 `TRASH_RESET_BTN_DEBOUNCE` 40ms). RC/캐패시터 불필요.
+- 동작(연속회전 서보는 위치 피드백이 없어 '홈'은 하드스톱으로만 정의):
+  - **짧게 클릭(SHORT)** = *detach-홈*: 서보 구동을 멈추고(무신호) **현재 위치를 홈으로 간주**(손으로 맞춘 위치 고정용, 물리 이동 없음).
+  - **길게 클릭(LONG, ≥`TRASH_RESET_BTN_LONG` 0.8s)** = *타이머 재시팅*: 게이트·분기를 닫힘/중앙 하드스톱 방향으로 `TRASH_REHOME_SEC`(1.2s) 동안 동시 구동해 **물리적으로 재시팅** 후 정지(드리프트/잼 복구).
+  - **항상 동작(오버라이드)**: 분류 사이클·정렬·ERROR·MAINTENANCE 어느 상태든 즉시 개입(진행 정지 → 홈 → idle). E-STOP과는 별개의 정비/캘리브레이션용 물리 버튼.
+- ⚠️ **길게(재시팅)는 서보 3축을 동시에 하드스톱으로 구동** → 그 시간 동안 **최악 동시 스톨 ~2.5A(@5V)**. 서보 5V 전원이 ≥3A인지 확인(아래 "전원 주의").
+
+### 상태 OLED (YWROBOT 12864 I2C, 운영자용 동작 표시)
+```
+OLED VCC ── Pi 3V3 (물리 1 또는 17핀)      OLED GND ── Pi GND
+OLED SDA ── GPIO2 (물리 3핀, I2C1 SDA)     OLED SCL ── GPIO3 (물리 5핀, I2C1 SCL)
+```
+- **YWROBOT "Display 12864" 0.96" 128×64 I2C** — 제어칩 **SSD1306**, 주소 **`0x3C`**(대개). 칩이 **SH1106** 변종이면 `TRASH_OLED_CONTROLLER=sh1106`(2px 오프셋 보정). 라이브러리 `luma.oled`가 둘 다 지원.
+- **VCC는 3.3–5V** 모듈(YWROBOT은 보통 둘 다 허용). I2C 신호 안정성을 위해 **Pi 3.3V 레일** 권장(SDA/SCL이 3.3V 로직과 일치, ~20mA라 Pi 3.3V로 충분).
+- **I2C1 버스 공유**: Hiwonder 벨트 드라이버(`0x34`)와 **같은 SDA/SCL을 공유**해도 된다(주소가 `0x3C`≠`0x34`로 다름). 두 장치가 GPIO2/3에 병렬로 붙는다(I2C는 멀티드롭 버스). 풀업은 Pi 내장 1.8kΩ로 충분.
+- 표시 내용(영문 약어, 128×64): **헤더**=장치명+IP(Pi 식별), **대형**=상태(`READY`/`PAUSED`/`DETECT`/`CAPTURE`/`WAIT AI`/`SORTING`/`ERROR`/`MAINT`)+회전 스피너(살아있음), **하단**=`C<cycle> <결과>` / `BLE ok|--` 또는 오류코드. 참여자 대면 UI는 iPad이고 이 화면은 **운영자 진단용**이라 영문이면 충분(한글 글리프 폰트 불요).
+- 선결: **I2C 활성화**(`dtparam=i2c_arm=on` + 재부팅) — [`pi-setup.md`](pi-setup.md) §6.2. 없거나 미배선이면 앱이 graceful fallback(표시 없이 정상 동작).
+
 ### 전원 주의
 - 서보·모터는 Pi 5V 레일에서 직접 빼지 말 것(순간 전류로 Pi 리셋/언더볼트).
 - 외부 전원과 Pi는 **GND 공통** 연결.
-- **서보 전원(5V) 용량** — SER0043 ×3: idle≈0(detach) / 무부하 3×~155mA≈0.47A / **최악(동시 스톨) 3×~0.83A≈2.5A**. inrush 감안 **5V ≥3A(권장 4–5A)**, Pi 전용 PSU와 분리.
+- **서보 전원(5V) 용량** — SER0043 ×3: idle≈0(detach) / 무부하 3×~155mA≈0.47A / **최악(동시 스톨) 3×~0.83A≈2.5A**. inrush 감안 **5V ≥3A(권장 4–5A)**, Pi 전용 PSU와 분리. 리셋 버튼 **길게(재시팅)가 3축 동시 구동**으로 이 최악 전류를 의도적으로 만든다 — `TRASH_REHOME_SEC` 동안 지속되므로 용량 확인.
 
 ## 분기 매핑 (config `ROUTE_MAP`)
 
@@ -110,6 +140,7 @@ CSI 리본을 Pi 카메라 포트에 연결. picamera2로 인식(실기기). 캡
 2. **카메라 정렬**: 캡처 존이 프레임 중앙에 오도록 고정.
 3. **서보(연속회전) 보정**: 양끝 **하드스톱** 설치 후 `TRASH_SERVO_SPEED`(저속)·`TRASH_SERVO_TRAVEL`(스톱 도달 시간)·`TRASH_*_DIR`(개/폐 방향 부호) 조정. 정지 시 스톱에 안착하는지 확인.
    - 수동 점검: 운영자 정비 화면(iPad)에서 `sort pet/can/other`, `belt fwd/stop`으로 개별 구동.
+   - **물리 리셋 버튼**: 짧게=현재 위치를 홈으로(detach), 길게=하드스톱 재시팅(`TRASH_REHOME_SEC` 조정). 재시팅이 약하면(스톱 미도달) 시간을 늘리고, 너무 길면(스톨 지속) 줄인다.
 4. **벨트 시간 보정**: 투입물이 분리수거함까지 이동하는 데 충분한 `TRASH_BELT_SECONDS` 설정.
 5. **비전 임계값 보정**: 캡처 프레임을 `.npy`로 저장 후
    `uv run trash-sorter --tune <frames_dir>` → 제안 `TRASH_MOTION_THRESH` 참고.

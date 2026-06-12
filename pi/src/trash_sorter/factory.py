@@ -16,6 +16,8 @@ from .ble.base import BleServer
 from .classify import build_classifier
 from .config import Settings, load_settings
 from .hardware.base import HardwareController
+from .hardware.button import ButtonInput
+from .hardware.display import StatusDisplay
 from .protocol import DeviceInfo
 from .state import StateMachine
 from .vision.base import Camera
@@ -61,6 +63,8 @@ class AppContext:
     photo_server: PhotoServer
     hardware: HardwareController
     camera: Camera
+    button: ButtonInput | None = None
+    display: StatusDisplay | None = None
 
 
 def _build_hardware(settings: Settings, mock: bool) -> HardwareController:
@@ -71,6 +75,40 @@ def _build_hardware(settings: Settings, mock: bool) -> HardwareController:
     from .hardware.gpiozero_impl import GpiozeroHardware
 
     return GpiozeroHardware(settings)
+
+
+def _build_button(settings: Settings, mock: bool) -> ButtonInput | None:
+    """리셋 버튼. 비활성(enabled=False)이면 None. 실기기 생성 실패는 비치명(없이 진행)."""
+    if not settings.button.enabled:
+        return None
+    if mock:
+        from .hardware.button import MockButton
+
+        return MockButton()
+    try:
+        from .hardware.button import GpiozeroButton
+
+        return GpiozeroButton(settings)
+    except Exception as e:  # noqa: BLE001 - 버튼 미배선/핀 충돌은 비치명 → 버튼 없이 운영
+        log.warning("리셋 버튼 초기화 실패 — 버튼 없이 진행: %s", e)
+        return None
+
+
+def _build_display(settings: Settings, mock: bool) -> StatusDisplay | None:
+    """상태 OLED. 비활성(enabled=False)이면 None. I2C 미활성/미배선 실패는 비치명(없이 진행)."""
+    if not settings.display.enabled:
+        return None
+    if mock:
+        from .hardware.display import MockDisplay
+
+        return MockDisplay()
+    try:
+        from .hardware.display import LumaOledDisplay
+
+        return LumaOledDisplay(settings)
+    except Exception as e:  # noqa: BLE001 - OLED 미배선/I2C 미활성은 비치명 → 표시 없이 운영
+        log.warning("상태 OLED 초기화 실패 — 표시 없이 진행: %s", e)
+        return None
 
 
 def _build_camera(settings: Settings, mock: bool) -> Camera:
@@ -115,6 +153,9 @@ def build_app(settings: Settings | None = None, *, mock: bool | None = None) -> 
     hardware = _build_hardware(settings, mock_hw)
     camera = _build_camera(settings, mock_cam)
     ble = _build_ble(settings, mock_ble)
+    # 버튼·OLED는 하드웨어 계층 — 모터와 같은 mock(TRASH_MOCK_HARDWARE) 분기. 각각 enabled 플래그.
+    button = _build_button(settings, mock_hw)
+    display = _build_display(settings, mock_hw)
 
     orchestrator = Orchestrator(
         settings=settings,
@@ -126,6 +167,8 @@ def build_app(settings: Settings | None = None, *, mock: bool | None = None) -> 
         hardware=hardware,
         ble=ble,
         store=store,
+        button=button,
+        display=display,
     )
 
     # DeviceInfo는 HTTP 포트가 정해진 뒤(서버 시작 후) set_device_info로 갱신.
@@ -135,6 +178,8 @@ def build_app(settings: Settings | None = None, *, mock: bool | None = None) -> 
         photo_server=photo_server,
         hardware=hardware,
         camera=camera,
+        button=button,
+        display=display,
     )
 
 
