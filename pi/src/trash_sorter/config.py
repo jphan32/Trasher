@@ -83,16 +83,19 @@ class BeltConfig:
     forward_pin: int = field(default_factory=lambda: _i("TRASH_BELT_FWD_PIN", 23))
     backward_pin: int = field(default_factory=lambda: _i("TRASH_BELT_BWD_PIN", 24))
 
-    # --- Hiwonder I2C 드라이버(개루프 PWM, register 0x1f) ---
-    # 시간 기반 벨트라 폐루프(0x33)·엔코더 PPR 불필요 — 개루프 PWM으로 충분.
+    # --- Hiwonder 4ch I2C 드라이버(SA8870C) — 폐루프 고정속도(register 0x33) ---
+    # 실기기 확정(trash-bjl): 개루프(0x1f)는 이 모터를 못 돌리고 폐루프(0x33)만 강하게 구동된다.
+    # ⚠️ 보드 I2C VCC는 반드시 **5V**(보드가 내부 레귤레이터로 3.3V 생성). 3.3V 직결 시 MCU
+    # 언더파워 → 구동 중 I2C 버스 행(브라운아웃). 메모리 hiwonder-belt-i2c-rootcause 참조.
     i2c_bus: int = field(default_factory=lambda: _i("TRASH_BELT_I2C_BUS", 1))
     i2c_addr: int = field(default_factory=lambda: _x("TRASH_BELT_I2C_ADDR", 0x34))
-    pwm: int = field(default_factory=lambda: _i("TRASH_BELT_PWM", 60))  # 개루프 세기 0..100
-    ch_a: int = field(default_factory=lambda: _i("TRASH_BELT_CH_A", 0))  # 보드 채널 인덱스 0..3
-    ch_b: int = field(default_factory=lambda: _i("TRASH_BELT_CH_B", 1))
-    # 미러 장착(서로 반대 방향) 2모터 → 한쪽 부호를 뒤집어 같은 선속도 방향으로. 배선에 맞게 조정.
-    invert_a: bool = field(default_factory=lambda: _b("TRASH_BELT_INVERT_A", False))
-    invert_b: bool = field(default_factory=lambda: _b("TRASH_BELT_INVERT_B", True))
+    channel: int = field(default_factory=lambda: _i("TRASH_BELT_CHANNEL", 1))  # 모터 포트(M2=idx1)
+    # 폐루프 고정속도(-100..100, 부호=방향). 우리 배선은 음수가 정회전(엔코더 위상). 현장 조정.
+    speed: int = field(default_factory=lambda: _i("TRASH_BELT_SPEED", -50))
+    motor_type: int = field(default_factory=lambda: _i("TRASH_BELT_MOTOR_TYPE", 3))  # 3=JGB37-520
+    encoder_polarity: int = field(default_factory=lambda: _i("TRASH_BELT_POLARITY", 0))
+    # 폐루프 속도 명령은 보드 watchdog로 ~0.3s 후 감쇠 → 구동 중 이 간격으로 재전송(연속 회전).
+    refresh_s: float = field(default_factory=lambda: _f("TRASH_BELT_REFRESH", 0.05))
 
 
 @dataclass  # 비-frozen: settle/detect_max/motion_threshold 런타임 튜닝(/config). 해상도·awb 미노출.
